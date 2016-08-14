@@ -917,7 +917,7 @@ def ExportXModel(filePath):
 	cmds.refresh()
 	if UseExport2Bin():
 		export2binpath = GetExport2Bin()
-		os.system('"' + export2binpath + '" "' +filePath + '"')
+		#os.system('"' + export2binpath + '" "' +filePath + '"')
 
 def GetMaterialsFromMesh(mesh, dagPath):
 	textures = {}
@@ -1311,7 +1311,7 @@ def ExportXAnim(filePath):
 
 	if UseExport2Bin():
 		export2binpath = GetExport2Bin()
-		os.system('"' + export2binpath + '" "' +filePath + '"')
+		#os.system('"' + export2binpath + '" "' +filePath + '"')
 	
 	
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2147,7 +2147,7 @@ def SetExport2Bin():
 	# Check to make sure the path exists
 	if not os.path.isfile(export2binpath):
 		MessageBox("Given path does not exist")
-		return None
+		return ""
 	# cmds.promptDialog(title="Set Root Path", message=export2binpath)
 	# Set path
 	# , 0, reg.KEY_SET_VALUE)
@@ -2186,8 +2186,8 @@ def UseExport2Bin():
 		bE2B = reg.QueryValueEx(storageKey, "UseExport2Bin")[0]
 		reg.CloseKey(storageKey)
 	except WindowsError:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
-		reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, 0)
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
+		reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, "0")
 		reg.CloseKey(storageKey)
 
 	if bE2B == "1":
@@ -2195,7 +2195,7 @@ def UseExport2Bin():
 	else:
 		res = False
 
-	if GetExport2Bin() == ""
+	if GetExport2Bin() == "":
 		res = False
 	return res
 
@@ -2207,7 +2207,7 @@ def ToggleE2B():
 		reg.CloseKey(storageKey)
 	except WindowsError:
 		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
-		reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, 0)
+		reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, "0")
 		reg.CloseKey(storageKey)
 
 	if bE2B == "0":
@@ -2218,10 +2218,10 @@ def ToggleE2B():
 	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
 	reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, bE2B)
 	reg.CloseKey(storageKey)
-	#CreateMenu()
+	CreateMenu()
 	
-def SetGame(name):
-	currentGame = name
+#def SetGame(name):
+#	currentGame = name
 	
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------ Init ------------------------------------------------------------------------------
@@ -2277,9 +2277,9 @@ def CreateMenu():
 #	cmds.menuItem(label="CoD5", command="CoDMayaTools.SetGame('CoD5')")
 #	cmds.menuItem(label="CoD4", command="CoDMayaTools.SetGame('CoD4')")
 #	cmds.setParent(menu, menu=True)
-	if(UseExport2Bin())
+	if UseExport2Bin():
 		cmds.menuItem(label="Export2Bin: on", command="CoDMayaTools.ToggleE2B()")
-	else
+	else:
 		cmds.menuItem(label="Export2Bin: off", command="CoDMayaTools.ToggleE2B()")
 	cmds.menuItem(label="Set Path to Export2Bin", command="CoDMayaTools.SetExport2Bin()")
 	cmds.menuItem(divider=True)
