@@ -82,7 +82,7 @@ import re
 
 WarningsDuringExport = 0 # Number of warnings shown during current export
 CM_TO_INCH = 0.3937007874015748031496062992126 # 1cm = 50/127in
-FILE_VERSION = 1.9
+FILE_VERSION = 2.0
 VERSION_CHECK_URL = "https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/version"
 GLOBAL_STORAGE_REG_KEY = (reg.HKEY_CURRENT_USER, "Software\\CoDMayaTools") # Registry path for global data storage
 #				name	 : 		control code name,				control friendly name,	data storage node name,	refresh function,		export function
@@ -2015,12 +2015,18 @@ def AboutWindow():
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def HasInternetAccess():
 	# http://stackoverflow.com/questions/3764291/checking-network-connection
+	'''
 	try:
 		urllib2.urlopen('http://8.8.8.8', timeout=1) # Use IP address (google.com) instead of domain name, to avoid DNS lookup time
 		return True
 	except urllib2.URLError as err:
 		return False
-	
+	'''
+	response = os.system("ping -c 1 8.8.8.8")
+	if response == 0:
+		return True
+	else:
+		return False
 def CheckForUpdates():
 	try:
 		if not HasInternetAccess(): # Apparently, the timeout does not affect DNS lookup time, so internet connectivity needs to be checked before getting update info to avoid long script load times if there is no internet
@@ -2261,7 +2267,113 @@ def ForceExport2Bin(yesno):
 	
 #def SetGame(name):
 #	currentGame = name
-	
+
+##########################################################
+#   Ray's Animation Toolkit                              #
+#                                                        #
+#   Credits:                                             #
+#   Aidan - teaching me how to make plugins like this :) #
+##########################################################
+
+def GenerateCamAnim():
+	useDefMesh = False
+	if (cmds.objExists(getObjectByAlias("camera")) == False):
+		print "Camera doesn't exist"
+		return
+	if (cmds.objExists(getObjectByAlias("weapon")) == False):
+		print "Weapon doesn't exist"
+		return
+	animStart = cmds.playbackOptions(query=True, minTime=True)
+	animEnd = cmds.playbackOptions(query=True, maxTime=True)
+	jointGun = cmds.xform(getObjectByAlias("weapon"), query=True, rotation=True)
+	jointGunPos = cmds.xform(getObjectByAlias("weapon"), query=True, translation=True)
+	GunMoveXorig = jointGunPos[0]*-0.025
+	GunRotYAddorig = jointGunPos[0]*-0.5
+	GunRotXAddorig = jointGunPos[1]*-0.25
+	progressW = cmds.progressWindow(minValue=animStart,maxValue=animEnd)
+	for i in range(animStart,animEnd+1):
+		cmds.currentTime(i)
+		jointGun = cmds.xform(getObjectByAlias("weapon"), query=True, rotation=True)
+		jointGunPos = cmds.xform(getObjectByAlias("weapon"), query=True, translation=True)
+		GunMoveX = jointGunPos[0]*-0.025
+		GunRotYAdd = jointGunPos[0]*-0.5
+		GunRotXAdd = jointGunPos[1]*-0.25
+		GunRot = jointGun
+		GunRot[0] = jointGun[0]
+		GunRot[0] = GunRot[0] * 0.025
+		GunRot[1] = jointGun[1]
+		GunRot[1] = GunRot[1] * 0.025
+		GunRot[2] = jointGun[2]
+		GunRot[2] = GunRot[2] * 0.025
+		print GunRot
+		print jointGun
+		cmds.select(getObjectByAlias("camera"), replace=True)
+		# cmds.rotate(GunRot[0], GunRot[1], GunRot[2], rotateXYZ=True)
+		cmds.setKeyframe(v=(GunMoveX-GunMoveXorig),at='translateX')
+		cmds.setKeyframe(v=GunRot[0]+(GunRotXAdd-GunRotXAddorig),at='rotateX')
+		cmds.setKeyframe(v=(GunRot[1]+(GunRotYAdd-GunRotYAddorig)),at='rotateY')
+		cmds.setKeyframe(v=GunRot[2],at='rotateZ')
+		cmds.progressWindow(edit=True,step=1)
+	cmds.progressWindow(edit=True,endProgress=True)
+
+def RemoveCameraKeys():
+	if (cmds.objExists(getObjectByAlias("camera")) == False):
+		print "ERROR: Camera doesn't exist"
+		return
+	else:
+		print "Camera exists!"
+		jointCamera = cmds.joint(getObjectByAlias("camera"), query=True)
+	animStart = cmds.playbackOptions(query=True, minTime=True)
+	animEnd = cmds.playbackOptions(query=True, maxTime=True)
+	cmds.select(getObjectByAlias("camera"), replace=True)
+		#cmds.setAttr('tag_camera.translateX',0)
+		#cmds.setAttr('tag_camera.translateY',0)
+		#cmds.setAttr('tag_camera.translateZ',0)
+		#cmds.setAttr('tag_camera.rotateX',0)
+		#cmds.setAttr('tag_camera.rotateY',0)
+		#cmds.setAttr('tag_camera.rotateZ',0)
+	# cmds.rotate(GunRot[0], GunRot[1], GunRot[2], rotateXYZ=True)
+	cmds.cutKey(clear=True,time=(animStart,animEnd+1))
+
+def RemoveCameraAnimData():
+	if (cmds.objExists(getObjectByAlias("camera")) == False):
+		print "ERROR: Camera doesn't exist"
+		return
+	else:
+		print "Camera exists!"
+		jointCamera = cmds.joint(getObjectByAlias("camera"), query=True)
+	animStart = cmds.playbackOptions(query=True, animationStartTime=True)
+	animEnd = cmds.playbackOptions(query=True, animationEndTime=True)
+	cmds.cutKey(clear=True,time=(animStart,animEnd+1))
+	cmds.select(getObjectByAlias("camera"), replace=True)
+	cmds.setAttr(getObjectByAlias("camera")+'.translateX',0)
+	cmds.setAttr(getObjectByAlias("camera")+'.translateY',0)
+	cmds.setAttr(getObjectByAlias("camera")+'.translateZ',0)
+	cmds.setAttr(getObjectByAlias("camera")+'.rotateX',0)
+	cmds.setAttr(getObjectByAlias("camera")+'.rotateY',0)
+	cmds.setAttr(getObjectByAlias("camera")+'.rotateZ',0)
+
+def setObjectAlias(aname):
+	if len(cmds.ls("CoDMayaTools")) == 0:
+		cmds.createNode("renderLayer", name="CoDMayaTools", skipSelect=True)
+	if not cmds.attributeQuery("objAlias%s" % aname, node="CoDMayaTools", exists=True):
+		cmds.addAttr("CoDMayaTools", longName="objAlias%s" % aname, dataType='string')
+	objects = cmds.ls(selection=True);
+	if len(objects) == 1:
+		print "Marking selected object as %s" % aname
+	else:
+		print "Selected more than 1 object or none at all"
+		return
+	obj = objects[0]
+	cmds.setAttr("CoDMayaTools.objAlias%s" % aname, obj, type='string')
+
+def getObjectByAlias(aname):
+	if len(cmds.ls("CoDMayaTools")) == 0:
+		cmds.createNode("renderLayer", name="CoDMayaTools", skipSelect=True)
+	if not cmds.attributeQuery("objAlias%s" % aname, node="CoDMayaTools", exists=True):
+		return ""
+	return cmds.getAttr("CoDMayaTools.objAlias%s" % aname) or ""
+
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------ Init ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2289,13 +2401,26 @@ def CreateMenu():
 	cmds.menuItem(label="Import XModel...", subMenu=True)
 	cmds.menuItem(label="...from CoD5", command="CoDMayaTools.ImportXModel('CoD5')")
 	cmds.menuItem(label="...from CoD4", command="CoDMayaTools.ImportXModel('CoD4')")
-	cmds.menuItem(label="...from FastFile", enable=False)
+#	cmds.menuItem(label="...from FastFile", enable=False)
 	cmds.setParent(menu, menu=True)
 	
-	cmds.menuItem(label="Import XAnim...", subMenu=True, enable=False)
-	cmds.menuItem(label="...from CoD5", command="CoDMayaTools.ImportXAnim('CoD5')")
-	cmds.menuItem(label="...from CoD4", enable=False)
-	cmds.menuItem(label="...from FastFile", enable=False)
+#	cmds.menuItem(label="Import XAnim...", subMenu=True, enable=False)
+#	cmds.menuItem(label="...from CoD5", command="CoDMayaTools.ImportXAnim('CoD5')")
+#	cmds.menuItem(label="...from CoD4", enable=False)
+#	cmds.menuItem(label="...from FastFile", enable=False)
+#	cmds.setParent(menu, menu=True)
+	# Ray's Animation Toolkit
+	cmds.menuItem(divider=True)
+	cmds.menuItem(label="Ray's Camera Animation Toolkit", subMenu=True)
+#	cmds.menuItem(label="Camera animation", subMenu=True)
+	cmds.menuItem(label="Mark as camera", command="CoDMayaTools.setObjectAlias('camera')")
+	cmds.menuItem(label="Mark as weapon", command="CoDMayaTools.setObjectAlias('weapon')")
+	cmds.menuItem(divider=True)
+	cmds.menuItem(label="Generate camera animation", command="CoDMayaTools.GenerateCamAnim()")
+	cmds.menuItem(divider=True)
+	cmds.menuItem(label="Remove camera animation in current range", command=RemoveCameraKeys)
+	cmds.menuItem(label="Reset camera", command=RemoveCameraAnimData)
+	#cmds.setParent("raysToolkit", menu=True)
 	cmds.setParent(menu, menu=True)
 	
 	# IWIxDDS
@@ -2328,7 +2453,7 @@ def CreateMenu():
 	
 	# Tools Info
 	cmds.menuItem(label="About", command="CoDMayaTools.AboutWindow()")
-	
+
 	# Updates
 #	update = CheckForUpdates()
 #	if update:
