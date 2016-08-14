@@ -41,6 +41,10 @@
 #	+ Added CoD4 XModel importing
 #	+ Automatically exports black vertices as white (can disable this in the customization section at the top of the script file)
 #	* Bug fixes
+# VERSION 2.0
+# 	+ Added an option for exporting anims with better quality and reduced jitter (only applies to custom made anims)
+#	+ Support for Export2Bin
+#
 
 # TODO: Speed up joint weight loading
 
@@ -1216,7 +1220,8 @@ def ExportXAnim(filePath):
 	frameStart = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameStartField", query=True, value=True)
 	frameEnd = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameEndField", query=True, value=True)
 	fps = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FPSField", query=True, value=True)
-	multiplier = cmds.floatField(OBJECT_NAMES['xanim'][0]+"_MULTIField", query=True, value=True)
+	QMultiplier = math.pow(2,cmds.floatField(OBJECT_NAMES['xanim'][0]+"_MULTIField", query=True, value=True))
+	multiplier = 1/QMultiplier
 	fps = fps/multiplier;
 	if frameStart < 0 or frameStart > frameEnd:
 		return "Error: Invalid frame range (start < 0 or start > end)"
@@ -1582,7 +1587,8 @@ def CreateXAnimWindow():
 	framesEndField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameEndField", height=21, width=35, minValue=0, changeCommand=XAnimWindow_UpdateFrameRange, annotation="Ending frame to export (inclusive)")
 	fpsLabel = cmds.text(label="FPS:")
 	fpsField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FPSField", height=21, width=35, value=1, minValue=1, changeCommand=XAnimWindow_UpdateFramerate, annotation="Animation FPS")
-	multiField = cmds.floatField(OBJECT_NAMES['xanim'][0]+"_MULTIField", height=21, width=60, value=1, minValue=0.01, maxValue=1, step=0.1, changeCommand=XAnimWindow_UpdateMultiplier, annotation="Frame step")
+	multiLabel = cmds.text(label="Quality (1-10)", annotation="Quality of the animation, higher values result in less jitter but produce larger files.")
+	multiField = cmds.floatField(OBJECT_NAMES['xanim'][0]+"_MULTIField", height=21, width=35, value=1, minValue=1, maxValue=10, step=1, changeCommand=XAnimWindow_UpdateMultiplier, annotation="Quality of the animation, higher values result in less jitter but produce larger files.")
 	
 	notetracksLabel = cmds.text(label="Notetrack:", annotation="Notetrack info for the animation")
 	noteList = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", allowMultiSelection=False, selectCommand=XAnimWindow_SelectNote, annotation="List of notes in the notetrack")
@@ -1628,7 +1634,9 @@ def CreateXAnimWindow():
 						(framesToLabel, 'top', 8, separator1), (framesToLabel, 'left', 4+35+4, framesLabel),
 						(framesEndField, 'top', 5, separator1), (framesEndField, 'left', 4, framesToLabel),
 						(fpsLabel, 'top', 8, framesStartField),
-						(fpsField, 'top', 5, framesStartField), (multiField, 'left', 21, framesStartField), (multiField, 'top', 5, framesStartField), (fpsField, 'left', 21, fpsLabel),
+						(fpsField, 'top', 5, framesStartField), (fpsField, 'left', 21, fpsLabel),
+						(multiLabel, 'top', 8, fpsLabel)
+						(multiField, 'top', 5, fpsField), (multiField, 'left', 21, fpsField),
 						(notetracksLabel, 'top', 5, fpsField),
 						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 7, separator2),
 						(addNoteButton, 'top', 5, notetracksLabel),
