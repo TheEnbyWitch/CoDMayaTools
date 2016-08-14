@@ -82,8 +82,8 @@ import re
 
 WarningsDuringExport = 0 # Number of warnings shown during current export
 CM_TO_INCH = 0.3937007874015748031496062992126 # 1cm = 50/127in
-FILE_VERSION = 1.51
-VERSION_CHECK_URL = "http://www.aidanshafran.com/codmayatools/version.txt"
+FILE_VERSION = 1.9
+VERSION_CHECK_URL = "https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/version"
 GLOBAL_STORAGE_REG_KEY = (reg.HKEY_CURRENT_USER, "Software\\CoDMayaTools") # Registry path for global data storage
 #				name	 : 		control code name,				control friendly name,	data storage node name,	refresh function,		export function
 OBJECT_NAMES = 	{'menu'  : 		["CoDMayaToolsMenu",    		"Call of Duty Tools", 	None,					None,					None],
@@ -2016,7 +2016,7 @@ def AboutWindow():
 def HasInternetAccess():
 	# http://stackoverflow.com/questions/3764291/checking-network-connection
 	try:
-		urllib2.urlopen('http://74.125.228.100', timeout=1) # Use IP address (google.com) instead of domain name, to avoid DNS lookup time
+		urllib2.urlopen('http://8.8.8.8', timeout=1) # Use IP address (google.com) instead of domain name, to avoid DNS lookup time
 		return True
 	except urllib2.URLError as err:
 		return False
@@ -2086,7 +2086,7 @@ def SetRootFolder(msg=None, game="none"):
 	#if cmds.promptDialog(title="Set Root Path", message=msg or "Change your root path:\t\t\t", text=codRootPath) != "Confirm":
 	#	return None
 	
-	codRootPath = cmds.fileDialog2(fileMode=3, dialogStyle=2)[0]
+	codRootPath = cmds.fileDialog2(fileMode=3, dialogStyle=2)[0] + "/"
 	
 	# Check to make sure the path exists
 	if not os.path.isdir(codRootPath):
@@ -2330,11 +2330,11 @@ def CreateMenu():
 	cmds.menuItem(label="About", command="CoDMayaTools.AboutWindow()")
 	
 	# Updates
-	update = CheckForUpdates()
-	if update:
-		cmds.setParent(menu, menu=True)
-		cmds.menuItem(divider=True)
-		cmds.menuItem(label="A newer version (v%s) of CoD Maya Tools is available! (Click to automatically update)" % ('%f' % (update[0])).rstrip('0').rstrip('.'), command="CoDMayaTools.DownloadUpdate('%s')" % update[1])
+#	update = CheckForUpdates()
+#	if update:
+#		cmds.setParent(menu, menu=True)
+#		cmds.menuItem(divider=True)
+#		cmds.menuItem(label="A newer version (v%s) of CoD Maya Tools is available! (Click to automatically update)" % ('%f' % (update[0])).rstrip('0').rstrip('.'), command="CoDMayaTools.DownloadUpdate('%s')" % update[1])
 	
 # ---- Create windows ----
 CreateMenu()
