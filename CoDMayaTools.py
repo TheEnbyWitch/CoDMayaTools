@@ -1587,8 +1587,8 @@ def CreateXAnimWindow():
 	framesEndField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameEndField", height=21, width=35, minValue=0, changeCommand=XAnimWindow_UpdateFrameRange, annotation="Ending frame to export (inclusive)")
 	fpsLabel = cmds.text(label="FPS:")
 	fpsField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FPSField", height=21, width=35, value=1, minValue=1, changeCommand=XAnimWindow_UpdateFramerate, annotation="Animation FPS")
-	qualityLabel = cmds.text(label="Quality (1-10)", annotation="Quality of the animation, higher values result in less jitter but produce larger files.")
-	qualityField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_qualityField", height=21, width=35, value=1, minValue=1, maxValue=10, step=1, changeCommand=XAnimWindow_UpdateMultiplier, annotation="Quality of the animation, higher values result in less jitter but produce larger files.")
+	qualityLabel = cmds.text(label="Quality (0-10)", annotation="Quality of the animation, higher values result in less jitter but produce larger files. Default is 0")
+	qualityField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_qualityField", height=21, width=35, value=0, minValue=0, maxValue=10, step=1, changeCommand=XAnimWindow_UpdateMultiplier, annotation="Quality of the animation, higher values result in less jitter but produce larger files.")
 	
 	notetracksLabel = cmds.text(label="Notetrack:", annotation="Notetrack info for the animation")
 	noteList = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", allowMultiSelection=False, selectCommand=XAnimWindow_SelectNote, annotation="List of notes in the notetrack")
@@ -1614,6 +1614,7 @@ def CreateXAnimWindow():
 					(separator1, 'left', 0), (separator1, 'right', 0),
 					(framesLabel, 'left', 10),
 					(fpsLabel, 'left', 10),
+					(qualityLabel, 'left', 10),
 					(notetracksLabel, 'left', 10),
 					(noteList, 'left', 10),
 					(addNoteButton, 'right', 10),
@@ -1635,9 +1636,9 @@ def CreateXAnimWindow():
 						(framesEndField, 'top', 5, separator1), (framesEndField, 'left', 4, framesToLabel),
 						(fpsLabel, 'top', 8, framesStartField),
 						(fpsField, 'top', 5, framesStartField), (fpsField, 'left', 21, fpsLabel),
-						(qualityLabel, 'top', 8, fpsLabel),
-						(qualityField, 'top', 5, fpsField), (qualityField, 'left', 21, fpsField),
-						(notetracksLabel, 'top', 5, fpsField),
+						(qualityLabel, 'top', 8, fpsField),
+						(qualityField, 'top', 5, fpsField), (qualityField, 'left', 21, qualityLabel),
+						(notetracksLabel, 'top', 5, qualityLabel),
 						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 7, separator2),
 						(addNoteButton, 'top', 5, notetracksLabel),
 						(removeNoteButton, 'top', 5, addNoteButton),
