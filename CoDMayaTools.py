@@ -2073,7 +2073,7 @@ def DownloadUpdate(downloadUpdateURL):
 			GoToForumTopic()
 
 def GoToForumTopic():
-	webbrowser.open("http://www.ugx-mods.com/forum/index.php?topic=1295.0")	
+	webbrowser.open("http://ugx-mods.com/forum/index.php?topic=12224.0")	
 	
 	
 	
