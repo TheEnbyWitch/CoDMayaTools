@@ -1635,7 +1635,7 @@ def CreateXAnimWindow():
 						(framesEndField, 'top', 5, separator1), (framesEndField, 'left', 4, framesToLabel),
 						(fpsLabel, 'top', 8, framesStartField),
 						(fpsField, 'top', 5, framesStartField), (fpsField, 'left', 21, fpsLabel),
-						(qualityLabel, 'top', 8, fpsLabel)
+						(qualityLabel, 'top', 8, fpsLabel),
 						(qualityField, 'top', 5, fpsField), (qualityField, 'left', 21, fpsField),
 						(notetracksLabel, 'top', 5, fpsField),
 						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 7, separator2),
