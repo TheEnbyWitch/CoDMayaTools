@@ -1,4 +1,4 @@
-# Copyright 2014, Aidan Shafran
+# Copyright 2016, Ray1235
 
 # CoDMayaTools is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -45,6 +45,7 @@
 # 	+ Added an option for exporting anims with better quality and reduced jitter (only applies to custom made anims)
 #	+ Support for Export2Bin
 #	+ Supports reading notetracks from old CoD Exporter for Maya 8.5 and from Wraith exports
+#   + Merged with Ray's camera animation toolkit
 
 # TODO: Speed up joint weight loading
 
