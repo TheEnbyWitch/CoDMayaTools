@@ -2233,8 +2233,29 @@ def ToggleE2B():
 	else:
 		bE2B = "off"
 
+	if GetExport2Bin() == "":
+		bE2B = "off"
+		if cmds.confirmDialog(message="You need to set Export2Bin path first!\nDo you want to set the path to Export2Bin?", button=['Yes','No'], title="Error") == "yes":
+			if not SetExport2Bin() == "":
+				bE2B = "on"
+
 	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
 	reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, bE2B)
+	reg.CloseKey(storageKey)
+	CreateMenu()
+ 	
+def ForceExport2Bin(yesno):
+	try:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
+		bE2B = reg.QueryValueEx(storageKey, "UseExport2Bin")[0]
+		reg.CloseKey(storageKey)
+	except WindowsError:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
+		reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, "off")
+		reg.CloseKey(storageKey)
+
+	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
+	reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, yesno)
 	reg.CloseKey(storageKey)
 	CreateMenu()
 	
@@ -2319,3 +2340,17 @@ def CreateMenu():
 CreateMenu()
 CreateXAnimWindow()
 CreateXModelWindow()
+try:
+	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
+	codRootPath = reg.QueryValueEx(storageKey, "RootPath")[0]
+	reg.CloseKey(storageKey)
+except WindowsError:
+	cmds.confirmDialog(message="It looks like this is your first time running CoD Maya Tools.\nYou will be asked to choose your game's root path.", button=['OK'], defaultButton='OK', title="First time configuration") #MessageBox("Please set your root path before starting to work with CoD Maya Tools")
+	SetRootFolder()
+	res = cmds.confirmDialog(message="Are you using Export2Bin? (only required for Black Ops 3)", button=['Yes', 'No'], defaultButton='No', title="First time configuration")
+	if res == "Yes":
+		SetExport2Bin()
+		ForceExport2Bin("on")
+	else:
+		ForceExport2Bin("off")
+	cmds.confirmDialog(message="You're set! You can now export models and anims to any CoD!")
