@@ -44,7 +44,7 @@
 # VERSION 2.0
 # 	+ Added an option for exporting anims with better quality and reduced jitter (only applies to custom made anims)
 #	+ Support for Export2Bin
-#
+#	+ Supports reading notetracks from old CoD Exporter for Maya 8.5 and from Wraith exports
 
 # TODO: Speed up joint weight loading
 
@@ -70,6 +70,7 @@ import maya.OpenMaya as OpenMaya
 import maya.OpenMayaAnim as OpenMayaAnim
 import urllib2
 import socket
+import subprocess
 import webbrowser
 import Queue
 import _winreg as reg
@@ -920,8 +921,7 @@ def ExportXModel(filePath):
 	ProgressBarStep()
 	cmds.refresh()
 	if UseExport2Bin():
-		export2binpath = GetExport2Bin()
-		#os.system('"' + export2binpath + '" "' +filePath + '"')
+		RunExport2Bin(filePath)
 
 def GetMaterialsFromMesh(mesh, dagPath):
 	textures = {}
@@ -1315,8 +1315,7 @@ def ExportXAnim(filePath):
 	cmds.refresh()
 
 	if UseExport2Bin():
-		export2binpath = GetExport2Bin()
-		#os.system('"' + export2binpath + '" "' +filePath + '"')
+		RunExport2Bin(filePath)
 	
 	
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2150,6 +2149,15 @@ def GetRootFolder(firstTimePrompt=True, game="none"):
 		
 	return codRootPath	
 
+def RunExport2Bin(file):
+	p = GetExport2Bin()
+#	p.replace("/","\\")
+#	file.replace("/","\\")
+	#os.system('"' + p.replace("/","\\") + '" "' + file.replace("/","\\") + '"') # DOESNT WORK
+	subprocess.call(p.replace("/","\\") + " \"" + file.replace("/","\\") + "\"")# , "\"" + file.replace("/","\\") + "\""])
+	#args = [p.replace("/","\\"), file.replace("/","\\")]
+	#subprocess.popen(args)
+
 def SetExport2Bin():
 	export2binpath = cmds.fileDialog2(fileMode=1, dialogStyle=2)[0]
 	
@@ -2189,40 +2197,41 @@ def GetExport2Bin(skipSet=True):
 	return export2binpath
 
 def UseExport2Bin():
-	bE2B = "0"
+	bE2B = "off"
 	try:
 		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
 		bE2B = reg.QueryValueEx(storageKey, "UseExport2Bin")[0]
 		reg.CloseKey(storageKey)
 	except WindowsError:
 		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-		reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, "0")
+		reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, "off")
 		reg.CloseKey(storageKey)
 
-	if bE2B == "1":
+	if bE2B == "on":
 		res = True
 	else:
 		res = False
 
 	if GetExport2Bin() == "":
 		res = False
+
 	return res
 
 def ToggleE2B():
-	bE2B = "0"
+	bE2B = "off"
 	try:
 		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
 		bE2B = reg.QueryValueEx(storageKey, "UseExport2Bin")[0]
 		reg.CloseKey(storageKey)
 	except WindowsError:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
-		reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, "0")
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
+		reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, "off")
 		reg.CloseKey(storageKey)
 
-	if bE2B == "0":
-		bE2B = "1"
+	if bE2B == "off":
+		bE2B = "on"
 	else:
-		bE2B = "0"
+		bE2B = "off"
 
 	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
 	reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, bE2B)
