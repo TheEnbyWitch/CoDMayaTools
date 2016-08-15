@@ -219,7 +219,7 @@ def ImportXAnim(game):
 # -------------------------------------------------------------------------- Import XModel -------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def ImportXModel(game):
-	codRootPath = GetRootFolder(True, game) # Only call this once, because it might create a dialog box
+	codRootPath = GetRootFolder() # Only call this once, because it might create a dialog box
 	xmodelPath = ImportFileSelectDialog(codRootPath, "XModel")
 	if not xmodelPath:
 		return
