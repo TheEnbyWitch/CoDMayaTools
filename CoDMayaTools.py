@@ -2412,7 +2412,7 @@ def GenerateCamAnim():
 	GunRotYAddorig = jointGunPos[0]*-0.5
 	GunRotXAddorig = jointGunPos[1]*-0.25
 	progressW = cmds.progressWindow(minValue=animStart,maxValue=animEnd)
-	for i in range(animStart,animEnd+1):
+	for i in range(int(animStart),int(animEnd+1)):
 		cmds.currentTime(i)
 		jointGun = cmds.xform(getObjectByAlias("weapon"), query=True, rotation=True)
 		jointGunPos = cmds.xform(getObjectByAlias("weapon"), query=True, translation=True)
