@@ -48,7 +48,7 @@
 #   	+ Merged with Ray's camera animation toolkit
 # VERSION 2.1
 #	+ Minor fix in RCAT which caused an error in Maya 2016
-#	+ Fixed constant asking for root folder
+#
 
 # TODO: Speed up joint weight loading
 
@@ -1946,9 +1946,9 @@ def GeneralWindow_SaveToField(windowID):
 def GeneralWindow_FileBrowser(windowID, formatExtension):
 	defaultFolder = GetRootFolder()
 	if windowID == 'xanim':
-		defaultFolder = os.path.join(defaultFolder, 'xanim_export/')
+		defaultFolder = os.path.join(defaultFolder, '/xanim_export/')
 	elif windowID == 'xmodel':
-		defaultFolder = os.path.join(defaultFolder, 'model_export/')
+		defaultFolder = os.path.join(defaultFolder, '/model_export/')
 	saveTo = cmds.fileDialog2(fileMode=0, fileFilter=formatExtension, caption="Export To", startingDirectory=defaultFolder)
 	if saveTo == None or len(saveTo) == 0 or saveTo[0].strip() == "":
 		return
