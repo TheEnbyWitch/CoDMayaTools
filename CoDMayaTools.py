@@ -48,7 +48,7 @@
 #   	+ Merged with Ray's camera animation toolkit
 # VERSION 2.1
 #	+ Minor fix in RCAT which caused an error in Maya 2016
-#
+#	+ Fixed constant asking for root folder
 
 # TODO: Speed up joint weight loading
 
