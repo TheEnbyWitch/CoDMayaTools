@@ -45,7 +45,10 @@
 # 	+ Added an option for exporting anims with better quality and reduced jitter (only applies to custom made anims)
 #	+ Support for Export2Bin
 #	+ Supports reading notetracks from old CoD Exporter for Maya 8.5 and from Wraith exports
-#   + Merged with Ray's camera animation toolkit
+#   	+ Merged with Ray's camera animation toolkit
+# VERSION 2.1
+#	+ Minor fix in RCAT which caused an error in Maya 2016
+#
 
 # TODO: Speed up joint weight loading
 
