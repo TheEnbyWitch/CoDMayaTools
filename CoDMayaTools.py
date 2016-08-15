@@ -2232,7 +2232,7 @@ def SetRootFolder(msg=None, game="none"):
 	
 	return codRootPath
 	
-def GetRootFolder(firstTimePrompt=True, game="none"):
+def GetRootFolder(firstTimePrompt=False, game="none"):
 #	if game == "none":
 #		game = currentGame
 #	if game == "none":
