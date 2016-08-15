@@ -45,7 +45,10 @@
 # 	+ Added an option for exporting anims with better quality and reduced jitter (only applies to custom made anims)
 #	+ Support for Export2Bin
 #	+ Supports reading notetracks from old CoD Exporter for Maya 8.5 and from Wraith exports
-#   + Merged with Ray's camera animation toolkit
+#   	+ Merged with Ray's camera animation toolkit
+# VERSION 2.1
+#	+ Minor fix in RCAT which caused an error in Maya 2016
+#
 
 # TODO: Speed up joint weight loading
 
@@ -1943,9 +1946,9 @@ def GeneralWindow_SaveToField(windowID):
 def GeneralWindow_FileBrowser(windowID, formatExtension):
 	defaultFolder = GetRootFolder()
 	if windowID == 'xanim':
-		defaultFolder = os.path.join(defaultFolder, 'xanim_export/')
+		defaultFolder = defaultFolder + 'xanim_export/'
 	elif windowID == 'xmodel':
-		defaultFolder = os.path.join(defaultFolder, 'model_export/')
+		defaultFolder = defaultFolder + 'model_export/'
 	saveTo = cmds.fileDialog2(fileMode=0, fileFilter=formatExtension, caption="Export To", startingDirectory=defaultFolder)
 	if saveTo == None or len(saveTo) == 0 or saveTo[0].strip() == "":
 		return
@@ -2229,7 +2232,7 @@ def SetRootFolder(msg=None, game="none"):
 	
 	return codRootPath
 	
-def GetRootFolder(firstTimePrompt=True, game="none"):
+def GetRootFolder(firstTimePrompt=False, game="none"):
 #	if game == "none":
 #		game = currentGame
 #	if game == "none":
@@ -2412,7 +2415,7 @@ def GenerateCamAnim():
 	GunRotYAddorig = jointGunPos[0]*-0.5
 	GunRotXAddorig = jointGunPos[1]*-0.25
 	progressW = cmds.progressWindow(minValue=animStart,maxValue=animEnd)
-	for i in range(animStart,animEnd+1):
+	for i in range(int(animStart),int(animEnd+1)):
 		cmds.currentTime(i)
 		jointGun = cmds.xform(getObjectByAlias("weapon"), query=True, rotation=True)
 		jointGunPos = cmds.xform(getObjectByAlias("weapon"), query=True, translation=True)
