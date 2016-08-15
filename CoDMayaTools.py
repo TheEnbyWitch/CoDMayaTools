@@ -1740,7 +1740,7 @@ def ReadXanimNotes(required_parameter):
 									 or NoteTrack == "clip_in"
 									 or NoteTrack == "rechamber_release"
 									 or NoteTrack == "rechamber_pull_back"
-									 or NoteTrack == "end"
+									 or NoteTrack == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
 
 									)
 					if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
@@ -1759,7 +1759,7 @@ def ReadXanimNotes(required_parameter):
 							 or noteName == "clip_in"
 							 or noteName == "rechamber_release"
 							 or noteName == "rechamber_pull_back"
-							 or noteName == "end"
+							 or noteName == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
 							)
 			if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
 				continue
