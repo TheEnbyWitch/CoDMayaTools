@@ -1946,9 +1946,9 @@ def GeneralWindow_SaveToField(windowID):
 def GeneralWindow_FileBrowser(windowID, formatExtension):
 	defaultFolder = GetRootFolder()
 	if windowID == 'xanim':
-		defaultFolder = os.path.join(defaultFolder, '/xanim_export/')
+		defaultFolder = defaultFolder + 'xanim_export/'
 	elif windowID == 'xmodel':
-		defaultFolder = os.path.join(defaultFolder, '/model_export/')
+		defaultFolder = defaultFolder + 'model_export/'
 	saveTo = cmds.fileDialog2(fileMode=0, fileFilter=formatExtension, caption="Export To", startingDirectory=defaultFolder)
 	if saveTo == None or len(saveTo) == 0 or saveTo[0].strip() == "":
 		return
