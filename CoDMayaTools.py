@@ -1593,6 +1593,8 @@ def CreateXAnimWindow():
 	notetracksLabel = cmds.text(label="Notetrack:", annotation="Notetrack info for the animation")
 	noteList = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", allowMultiSelection=False, selectCommand=XAnimWindow_SelectNote, annotation="List of notes in the notetrack")
 	addNoteButton = cmds.button(label="Add Note", width=75, command=XAnimWindow_AddNote, annotation="Add a note to the notetrack")
+	ReadNotesButton = cmds.button(label="Grab Notes", width=75, command=ReadXanimNotes, annotation="Grab Notes from Notetrack in Outliner")
+	RenameNoteTrack = cmds.button(label="Rename Note", command=RenameXanimNotes, annotation="Rename the currently selected note.")
 	removeNoteButton = cmds.button(label="Remove Note", command=XAnimWindow_RemoveNote, annotation="Remove the currently selected note from the notetrack")
 	noteFrameLabel = cmds.text(label="Frame:", annotation="The frame the currently selected note is applied to")
 	noteFrameField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_NoteFrameField", changeCommand=XAnimWindow_UpdateNoteFrame, height=21, width=30, minValue=0, annotation="The frame the currently selected note is applied to")
@@ -1607,7 +1609,7 @@ def CreateXAnimWindow():
 	
 	exportMultipleSlotsButton = cmds.button(label="Export Multiple Slots", command="CoDMayaTools.GeneralWindow_ExportMultiple('xanim')", annotation="Automatically export multiple slots at once, using each slot's saved selection")
 	exportInMultiExportCheckbox = cmds.checkBox(OBJECT_NAMES['xanim'][0]+"_UseInMultiExportCheckBox", label="Use current slot for Export Multiple", changeCommand="CoDMayaTools.GeneralWindow_ExportInMultiExport('xanim')", annotation="Check this make the 'Export Multiple Slots' button export this slot")
-	
+	IgnoreUslessNotes = cmds.checkBox("Scoba_IgnoreUslessNotes", label="Ignore Useless Notes like reload_large, etc.", annotation="Check this if you want to ignre notes like reload_large, etc.", value=True)
 	# Setup form
 	cmds.formLayout(form, edit=True,
 		attachForm=[(slotDropDown, 'top', 6), (slotDropDown, 'left', 10), (slotDropDown, 'right', 10),
@@ -1617,7 +1619,10 @@ def CreateXAnimWindow():
 					(qualityLabel, 'left', 10),
 					(notetracksLabel, 'left', 10),
 					(noteList, 'left', 10),
+					(IgnoreUslessNotes, 'left', 10),
 					(addNoteButton, 'right', 10),
+					(ReadNotesButton, 'right', 10),
+					(RenameNoteTrack, 'right', 10),
 					(removeNoteButton, 'right', 10),
 					(noteFrameField, 'right', 10),
 					(separator2, 'left', 0), (separator2, 'right', 0),
@@ -1639,9 +1644,12 @@ def CreateXAnimWindow():
 						(qualityLabel, 'top', 8, fpsField),
 						(qualityField, 'top', 5, fpsField), (qualityField, 'left', 21, qualityLabel),
 						(notetracksLabel, 'top', 5, qualityLabel),
-						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 7, separator2),
+						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 30, separator2),
+						(IgnoreUslessNotes, 'top', 10, noteList), (IgnoreUslessNotes, 'right', 10, removeNoteButton),
 						(addNoteButton, 'top', 5, notetracksLabel),
-						(removeNoteButton, 'top', 5, addNoteButton),
+						(ReadNotesButton, 'top', 5, addNoteButton),
+						(RenameNoteTrack, 'top', 5, ReadNotesButton),
+						(removeNoteButton, 'top', 5, RenameNoteTrack),
 						(noteFrameField, 'top', 5, removeNoteButton),
 						(noteFrameLabel, 'top', 8, removeNoteButton), (noteFrameLabel, 'right', 4, noteFrameField),
 						(separator2, 'bottom', 5, fileBrowserButton),
@@ -1692,6 +1700,118 @@ def XAnimWindow_AddNote(required_parameter):
 	
 	cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=noteName, selectIndexedItem=len((existingItems or []))+1)
 	XAnimWindow_SelectNote()
+
+def ReadXanimNotes(required_parameter):
+	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
+	existingItems = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", query=True, allItems=True)
+	noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
+
+	isWraithAnim = False
+
+	isNotWraithAnimButHasNoteTrack = False
+
+	if cmds.objExists('WraithNotes'):
+		isWraithAnim = True
+
+	if cmds.objExists('NoteTrack'):
+		isNotWraithAnimButHasNoteTrack = True
+
+	if cmds.objExists('WraithNotes') and cmds.objExists('NoteTrack'):
+		cmds.confirmDialog( title='ERROR', message='WraithNotes and NoteTrack both exist in this scene, please delete one and try again.' , button=['Ok'], defaultButton='Ok')
+		return
+
+
+
+	if isWraithAnim:
+		cmds.select( clear=True )
+		cmds.select( 'WraithNotes', hi=True )
+		cmds.select( 'WraithNotes', d=True ) # Select WraithNotes and it's children and then deselect it to avoid issues.
+
+		notes = cmds.ls( selection=True ) # Grab what is selected.
+
+		for NoteTrack in notes: # Go through each one.
+			if not "Shape" in NoteTrack: # Avoid ones with Shape at end.
+				for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
+					IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
+										NoteTrack == "reload_large" 
+									 or NoteTrack == "reload_small" 
+									 or NoteTrack == "reload_medium"
+									 or NoteTrack == "clip_out"
+									 or NoteTrack == "clip_in"
+									 or NoteTrack == "rechamber_release"
+									 or NoteTrack == "rechamber_pull_back"
+									 or NoteTrack == "end"
+
+									)
+					if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
+						continue
+					noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
+					cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+					cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
+	elif isNotWraithAnimButHasNoteTrack:
+		for note in cmds.keyframe("NoteTrack", attribute="MainNote", sl=False, q=True, tc=True): # cmds.keyframe("NoteTrack", attribute="MainNote", sl=False, q=True, tc=True) lists all the keyframes for this object's attribute, so we loop through it.
+			noteName =  cmds.getAttr('NoteTrack.MainNote',x=True, asString=True, t=note) # Here is where we grab the Note from the attribute "MainNote", asString allows us to return it as string instead of intiger.
+			IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
+								noteName == "reload_large" 
+							 or noteName == "reload_small" 
+							 or noteName == "reload_medium"
+							 or noteName == "clip_out"
+							 or noteName == "clip_in"
+							 or noteName == "rechamber_release"
+							 or noteName == "rechamber_pull_back"
+							 or noteName == "end"
+							)
+			if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
+				continue
+			if "sndnt#" in noteName:
+				noteName = noteName[6:] # This essentially, in laymans terms, strips the notetrack's name of the first 6 characters if it contains "sndnt#" in the name.
+			if "rmbnt#" in noteName:
+				noteName = noteName[6:]
+			noteList += "%s:%i," % (noteName, note) # Add Notes to Aidan's list.
+			cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+			cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=noteName, selectIndexedItem=len((existingItems or []))+1)
+	else:
+		cmds.confirmDialog( title='ERROR', message='Can\'t find Notetracks for Wriath Anim or Normal anim.' , button=['Ok'], defaultButton='Ok') 
+
+	XAnimWindow_SelectNote()
+
+
+def RenameXanimNotes(required_parameter):
+	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
+	currentIndex = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", query=True, selectIndexedItem=True)
+	if currentIndex != None and len(currentIndex) > 0 and currentIndex[0] >= 1:
+		if cmds.promptDialog(title="Rename NoteTrack in slot", message="Enter new notetrack name:\t\t  ") != "Confirm":
+			return
+	
+		userInput = cmds.promptDialog(query=True, text=True)
+		noteName = "".join([c for c in userInput if c.isalnum() or c=="_"]) # Remove all non-alphanumeric characters
+		if noteName == "":
+			MessageBox("Invalid note name")
+			return
+		currentIndex = currentIndex[0]
+		noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
+		notes = noteList.split(",")
+		noteInfo = notes[currentIndex-1].split(":")
+		note = int(noteInfo[1])
+		NoteTrack = userInput
+		
+		# REMOVE NOTE
+
+		cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, removeIndexedItem=currentIndex)
+		noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
+		notes = noteList.split(",")
+		del notes[currentIndex-1]
+		noteList = ",".join(notes)
+		cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+
+		# REMOVE NOTE
+		noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
+		noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
+		cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+		cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=currentIndex)
+		XAnimWindow_SelectNote()
+
+
 	
 def XAnimWindow_RemoveNote(required_parameter):
 	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
