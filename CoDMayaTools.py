@@ -1273,7 +1273,10 @@ def ExportXAnim(filePath):
 	currentFrame = cmds.currentTime(query=True)
 	for i in range(frameStart/multiplier, (frameEnd+1)/multiplier):
 		f.write("\nFRAME %i" % i)
-		cmds.currentTime(i*multiplier)
+		if cmds.checkBox("CoDMAYA_ReverseAnim", query=True, value=True):
+			cmds.currentTime(((frameEnd+1)-i)*multiplier)
+		else:
+			cmds.currentTime(i*multiplier)
 		
 		for j, joint in enumerate(joints):
 			f.write("\nPART %i\n" % j)
@@ -1613,6 +1616,7 @@ def CreateXAnimWindow():
 	exportMultipleSlotsButton = cmds.button(label="Export Multiple Slots", command="CoDMayaTools.GeneralWindow_ExportMultiple('xanim')", annotation="Automatically export multiple slots at once, using each slot's saved selection")
 	exportInMultiExportCheckbox = cmds.checkBox(OBJECT_NAMES['xanim'][0]+"_UseInMultiExportCheckBox", label="Use current slot for Export Multiple", changeCommand="CoDMayaTools.GeneralWindow_ExportInMultiExport('xanim')", annotation="Check this make the 'Export Multiple Slots' button export this slot")
 	IgnoreUslessNotes = cmds.checkBox("Scoba_IgnoreUslessNotes", label="Ignore Useless Notes like reload_large, etc.", annotation="Check this if you want to ignre notes like reload_large, etc.", value=True)
+	ReverseAnimation = cmds.checkBox("CoDMAYA_ReverseAnim", label="Export Animation Reversed", annotation="Check this if you want to export the anim. backwards. Usefule for reversing to make opposite sprints, etc.", value=False)
 	# Setup form
 	cmds.formLayout(form, edit=True,
 		attachForm=[(slotDropDown, 'top', 6), (slotDropDown, 'left', 10), (slotDropDown, 'right', 10),
@@ -1623,6 +1627,7 @@ def CreateXAnimWindow():
 					(notetracksLabel, 'left', 10),
 					(noteList, 'left', 10),
 					(IgnoreUslessNotes, 'left', 10),
+					(ReverseAnimation, 'left', 10),
 					(addNoteButton, 'right', 10),
 					(ReadNotesButton, 'right', 10),
 					(RenameNoteTrack, 'right', 10),
@@ -1647,8 +1652,9 @@ def CreateXAnimWindow():
 						(qualityLabel, 'top', 8, fpsField),
 						(qualityField, 'top', 5, fpsField), (qualityField, 'left', 21, qualityLabel),
 						(notetracksLabel, 'top', 5, qualityLabel),
-						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 30, separator2),
+						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 60, separator2),
 						(IgnoreUslessNotes, 'top', 10, noteList), (IgnoreUslessNotes, 'right', 10, removeNoteButton),
+						(ReverseAnimation, 'top', 10, IgnoreUslessNotes), (ReverseAnimation, 'right', 10, removeNoteButton),
 						(addNoteButton, 'top', 5, notetracksLabel),
 						(ReadNotesButton, 'top', 5, addNoteButton),
 						(RenameNoteTrack, 'top', 5, ReadNotesButton),
