@@ -1271,7 +1271,7 @@ def ExportXAnim(filePath):
 	f.write("NUMFRAMES %i\n" % fLength)
 	
 	currentFrame = cmds.currentTime(query=True)
-	for i in range(frameStart/multiplier, (frameEnd+1)/multiplier):
+	for i in range(int(frameStart/multiplier), int((frameEnd+1)/multiplier)):
 		f.write("\nFRAME %i" % i)
 		if cmds.checkBox("CoDMAYA_ReverseAnim", query=True, value=True):
 			cmds.currentTime(((frameEnd+1)-i)*multiplier)
