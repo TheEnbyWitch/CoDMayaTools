@@ -48,6 +48,8 @@
 #   	+ Merged with Ray's camera animation toolkit
 # VERSION 2.1
 #	+ Minor fix in RCAT which caused an error in Maya 2016
+# VERSION 2.2
+# 	+ Export2Bin support is fully finished
 #
 
 # TODO: Speed up joint weight loading
@@ -83,6 +85,7 @@ import struct
 import shutil
 import zipfile
 import re
+from subprocess import Popen, PIPE, STDOUT
 
 WarningsDuringExport = 0 # Number of warnings shown during current export
 CM_TO_INCH = 0.3937007874015748031496062992126 # 1cm = 50/127in
@@ -2285,12 +2288,19 @@ def GetRootFolder(firstTimePrompt=False, game="none"):
 		
 	return codRootPath	
 
-def RunExport2Bin(file):
+def RunExport2Bin(file):	
 	p = GetExport2Bin()
 #	p.replace("/","\\")
 #	file.replace("/","\\")
 	#os.system('"' + p.replace("/","\\") + '" "' + file.replace("/","\\") + '"') # DOESNT WORK
-	subprocess.call(p.replace("/","\\") + " \"" + file.replace("/","\\") + "\"")# , "\"" + file.replace("/","\\") + "\""])
+	cmd = (p.replace("/","\\") + " /single \"" + file.replace("/","\\") + "\"")# , "\"" + file.replace("/","\\") + "\""])
+	p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT)#, close_fds=True)
+	output = p.stdout.read()
+	bin_file = open("%s%s" % (os.path.splitext(file)[0], (os.path.splitext(file)[1]).replace("_export","_bin")), "w")
+
+	bin_file.write("%s" % output)
+
+	bin_file.close()
 	#args = [p.replace("/","\\"), file.replace("/","\\")]
 	#subprocess.popen(args)
 
