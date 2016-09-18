@@ -45,7 +45,7 @@
 # 	+ Added an option for exporting anims with better quality and reduced jitter (only applies to custom made anims)
 #	+ Support for Export2Bin
 #	+ Supports reading notetracks from old CoD Exporter for Maya 8.5 and from Wraith exports
-#   	+ Merged with Ray's camera animation toolkit
+#   + Merged with Ray's camera animation toolkit
 # VERSION 2.1
 #	+ Minor fix in RCAT which caused an error in Maya 2016
 # VERSION 2.2
@@ -2293,8 +2293,8 @@ def RunExport2Bin(file):
 #	p.replace("/","\\")
 #	file.replace("/","\\")
 	#os.system('"' + p.replace("/","\\") + '" "' + file.replace("/","\\") + '"') # DOESNT WORK
-	cmd = (p.replace("/","\\") + " /single \"" + file.replace("/","\\") + "\"")# , "\"" + file.replace("/","\\") + "\""])
-	p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT)#, close_fds=True)
+	cmd = ("\""+p.replace("/","\\") + "\" /single \"" + file.replace("/","\\") + "\"")# , "\"" + file.replace("/","\\") + "\""])
+	p = Popen(cmd, shell=False, stdin=PIPE, stdout=PIPE, stderr=STDOUT)#, close_fds=True)
 	output = p.stdout.read()
 	bin_file = open("%s%s" % (os.path.splitext(file)[0], (os.path.splitext(file)[1]).replace("_export","_bin")), "w")
 
