@@ -2602,6 +2602,11 @@ def CreateMenu():
 #		cmds.menuItem(label="A newer version (v%s) of CoD Maya Tools is available! (Click to automatically update)" % ('%f' % (update[0])).rstrip('0').rstrip('.'), command="CoDMayaTools.DownloadUpdate('%s')" % update[1])
 	
 # ---- Create windows ----
+try:
+	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
+except WindowsError:
+	storageKey = reg.CreateKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1]) # Seems to fail because above in the bin function it tries to open the key but doesn't exist and stops there, so I heck it and added this.
+
 CreateMenu()
 CreateXAnimWindow()
 CreateXModelWindow()
