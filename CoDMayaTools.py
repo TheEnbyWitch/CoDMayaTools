@@ -50,6 +50,9 @@
 #	+ Minor fix in RCAT which caused an error in Maya 2016
 # VERSION 2.2
 # 	+ Export2Bin support is fully finished
+# VERSION 2.3
+#	* Fixed Reg error/s.
+#	* (Hopyfully) Fixed Export2Bin and should now work and convert in same dir.
 #
 
 # TODO: Speed up joint weight loading
@@ -2290,17 +2293,21 @@ def GetRootFolder(firstTimePrompt=False, game="none"):
 
 def RunExport2Bin(file):	
 	p = GetExport2Bin()
+
+	directory = os.path.dirname(os.path.realpath(file))
+
+	p = subprocess.Popen([p, "*"], cwd=directory) # WORKS
 #	p.replace("/","\\")
 #	file.replace("/","\\")
 	#os.system('"' + p.replace("/","\\") + '" "' + file.replace("/","\\") + '"') # DOESNT WORK
-	cmd = ("\""+p.replace("/","\\") + "\" /single \"" + file.replace("/","\\") + "\"")# , "\"" + file.replace("/","\\") + "\""])
-	p = Popen(cmd, shell=False, stdin=PIPE, stdout=PIPE, stderr=STDOUT)#, close_fds=True)
-	output = p.stdout.read()
-	bin_file = open("%s%s" % (os.path.splitext(file)[0], (os.path.splitext(file)[1]).replace("_export","_bin")), "w")
-
-	bin_file.write("%s" % output)
-
-	bin_file.close()
+#	cmd = ("\""+p.replace("/","\\") + "\" /single \"" + file.replace("/","\\") + "\"")# , "\"" + file.replace("/","\\") + "\""])
+#	p = Popen(cmd, shell=False, stdin=PIPE, stdout=PIPE, stderr=STDOUT)#, close_fds=True)
+#	output = p.stdout.read()
+#	bin_file = open("%s%s" % (os.path.splitext(file)[0], (os.path.splitext(file)[1]).replace("_export","_bin")), "w")
+#
+#	bin_file.write("%s" % output)
+#
+#	bin_file.close()
 	#args = [p.replace("/","\\"), file.replace("/","\\")]
 	#subprocess.popen(args)
 
