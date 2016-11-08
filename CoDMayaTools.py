@@ -848,10 +848,10 @@ def ExportXModel(filePath):
 	# Write header
 	f.write("// Export filename: '%s'\n" % os.path.normpath(filePath))
 	if cmds.file(query=True, exists=True):
-		f.write("// Source filename: '%s'\n" % os.path.normpath(os.path.abspath(cmds.file(query=True, sceneName=True))))
+		f.write("// Source filename: '%s'\n" % os.path.normpath(os.path.abspath(cmds.file(query=True, sceneName=True))).encode('ascii', 'ignore')) # Ignore Ascii characters using .encode()
 	else:
 		f.write("// Source filename: Unsaved\n")
-	f.write("// Export time: %s\n\n" % datetime.datetime.now().strftime("%a %b %d %Y, %H:%M:%S"))
+	f.write("// Export time: %s\n\n" % datetime.datetime.now().strftime("%a %b %d %Y, %H:%M:%S")) 
 	f.write("MODEL\n")
 	f.write("VERSION 6\n\n")
 	
@@ -1256,7 +1256,7 @@ def ExportXAnim(filePath):
 	# Write header
 	f.write("// Export filename: '%s'\n" % os.path.normpath(filePath))
 	if cmds.file(query=True, exists=True):
-		f.write("// Source filename: '%s'\n" % os.path.normpath(os.path.abspath(cmds.file(query=True, sceneName=True))))
+		f.write("// Source filename: '%s'\n" % os.path.normpath(os.path.abspath(cmds.file(query=True, sceneName=True))).encode('ascii', 'ignore'))
 	else:
 		f.write("// Source filename: Unsaved\n")
 	f.write("// Export time: %s\n\n" % datetime.datetime.now().strftime("%a %b %d %Y, %H:%M:%S"))
