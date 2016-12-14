@@ -6,3 +6,4 @@ New features:
 - Export2Bin support - automatically converts xmodel_exports and xanim_exports to bin!
 - Supports reading notetracks from old CoD Exporter for Maya 8.5 and from Wraith exports
 - Automatic camera animation generation
+- Support for models with >65535 vertices
