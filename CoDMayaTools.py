@@ -1722,11 +1722,15 @@ def ReadXanimNotes(required_parameter):
 	noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
 
 	isWraithAnim = False
+	isSEAnim = False
 
 	isNotWraithAnimButHasNoteTrack = False
-
+	
 	if cmds.objExists('WraithNotes'):
 		isWraithAnim = True
+		
+	if cmds.objExists('SENotes'):
+		isSEAnim = True
 
 	if cmds.objExists('NoteTrack'):
 		isNotWraithAnimButHasNoteTrack = True
@@ -1736,8 +1740,34 @@ def ReadXanimNotes(required_parameter):
 		return
 
 
+	if isSEAnim:
+		cmds.select( clear=True )
+		cmds.select( 'SENotes', hi=True )
+		cmds.select( 'SENotes', d=True ) 
 
-	if isWraithAnim:
+		notes = cmds.ls( selection=True ) # Grab what is selected.
+
+		for NoteTrack in notes: # Go through each one.
+			if not "Shape" in NoteTrack: # Avoid ones with Shape at end.
+				for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
+					IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
+										NoteTrack == "reload_large" 
+									 or NoteTrack == "reload_small" 
+									 or NoteTrack == "reload_medium"
+									 or NoteTrack == "clip_out"
+									 or NoteTrack == "clip_in"
+									 or NoteTrack == "rechamber_release"
+									 or NoteTrack == "rechamber_pull_back"
+									 or NoteTrack == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
+
+									)
+					if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
+						continue
+					noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
+					cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+					cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
+	
+	elif isWraithAnim:
 		cmds.select( clear=True )
 		cmds.select( 'WraithNotes', hi=True )
 		cmds.select( 'WraithNotes', d=True ) # Select WraithNotes and it's children and then deselect it to avoid issues.
