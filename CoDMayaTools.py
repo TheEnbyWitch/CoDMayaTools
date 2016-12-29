@@ -889,12 +889,13 @@ def WriteCameraData(f, cameraNode):
 	# euler rotation is in radians, not degrees
 
 	eulerRotation.x = eulerRotation.x - (3.141/2)
+	eulerRotation.z = eulerRotation.z - (3.141/2)
 	#eulerRotation.y = eulerRotation.y + (3.141/2)
 	#print ("%f %f %f" % (eulerRotation.x*180/3.141, eulerRotation.y*180/3.141, eulerRotation.z*180/3.141))
 	mat = eulerRotation.asMatrix()
 	
 	# Write
-	f.write("\"origin\" : [ %f, %f, %f],\n" % (pos.x*CM_TO_INCH, pos.y*CM_TO_INCH, pos.z*CM_TO_INCH))
+	f.write("\"origin\" : [ %f, %f, %f],\n" % (pos.y*CM_TO_INCH, pos.x*-CM_TO_INCH, pos.z*CM_TO_INCH))
 	f.write("\"dir\" : [ %f, %f, %f],\n" % (mat(1,0), mat(1,1), mat(1,2))) #(mat(0,0), mat(0,1), mat(0,2)))
 	f.write("\"up\" : [ %f, %f, %f],\n" % (mat(2,0), mat(2,1), mat(2,2))) #(mat(1,0), mat(1,1), mat(1,2)))
 	f.write("\"right\" : [ %f, %f, %f],\n" % (mat(0,0), mat(0,1), mat(0,2))) # (mat(2,0), mat(2,1), mat(2,2)))
@@ -1544,7 +1545,7 @@ def ExportXCam(filePath):
 	f.write("{\n")
 	f.write("\"version\" : 1,\n")
 	if cmds.file(query=True, exists=True):
-		f.write("	\"scene\": \"%s\"\n" % os.path.normpath(os.path.abspath(cmds.file(query=True, sceneName=True))).encode('ascii', 'ignore'))
+		f.write("	\"scene\": \"%s\",\n" % os.path.normpath(os.path.abspath(cmds.file(query=True, sceneName=True))).encode('ascii', 'ignore'))
 	f.write("""	"align" : {
 		"tag" : "tag_align",
 		"offset" : [ 0.0154, -0.0251, 0.0000 ],
