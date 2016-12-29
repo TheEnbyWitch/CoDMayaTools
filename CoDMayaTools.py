@@ -885,16 +885,19 @@ def WriteCameraData(f, cameraNode):
 	# Debug info: as euler rotation
 	eulerRotation = rotQuaternion.asEulerRotation()
 	eulerRotation.reorderIt(OpenMaya.MEulerRotation.kXYZ)
+
+	# euler rotation is in radians, not degrees
+
 	eulerRotation.x = eulerRotation.x - (3.141/2)
-	eulerRotation.y = eulerRotation.y + (3.141/2)
+	#eulerRotation.y = eulerRotation.y + (3.141/2)
 	#print ("%f %f %f" % (eulerRotation.x*180/3.141, eulerRotation.y*180/3.141, eulerRotation.z*180/3.141))
 	mat = eulerRotation.asMatrix()
 	
 	# Write
 	f.write("\"origin\" : [ %f, %f, %f],\n" % (pos.x*CM_TO_INCH, pos.y*CM_TO_INCH, pos.z*CM_TO_INCH))
 	f.write("\"dir\" : [ %f, %f, %f],\n" % (mat(1,0), mat(1,1), mat(1,2))) #(mat(0,0), mat(0,1), mat(0,2)))
-	f.write("\"up\" : [ %f, %f, %f],\n" % (mat(0,0), mat(0,1), mat(0,2))) #(mat(1,0), mat(1,1), mat(1,2)))
-	f.write("\"right\" : [ %f, %f, %f],\n" % (mat(2,0), mat(2,1), mat(2,2))) # (mat(2,0), mat(2,1), mat(2,2)))
+	f.write("\"up\" : [ %f, %f, %f],\n" % (mat(2,0), mat(2,1), mat(2,2))) #(mat(1,0), mat(1,1), mat(1,2)))
+	f.write("\"right\" : [ %f, %f, %f],\n" % (mat(0,0), mat(0,1), mat(0,2))) # (mat(2,0), mat(2,1), mat(2,2)))
 	WriteNodeFloat(f, "flen", 24.0000)
 	WriteNodeFloat(f, "fov", fov)
 	WriteNodeFloat(f, "fdist", 400)
