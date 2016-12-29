@@ -53,6 +53,8 @@
 # VERSION 2.3
 #	* Fixed Reg error/s.
 #	* (Hopyfully) Fixed Export2Bin and should now work and convert in same dir.
+# VERSION 2.4
+#   * Added basic XCAM_EXPORT support
 #
 
 # TODO: Speed up joint weight loading
@@ -1545,7 +1547,7 @@ def ExportXCam(filePath):
 	f.write("{\n")
 	f.write("\"version\" : 1,\n")
 	if cmds.file(query=True, exists=True):
-		f.write("	\"scene\": \"%s\",\n" % os.path.normpath(os.path.abspath(cmds.file(query=True, sceneName=True))).encode('ascii', 'ignore'))
+		f.write("	\"scene\": \"%s\",\n" % os.path.normpath(os.path.abspath(cmds.file(query=True, sceneName=True))).encode('ascii', 'ignore').replace('\\','/'))
 	f.write("""	"align" : {
 		"tag" : "tag_align",
 		"offset" : [ 0.0154, -0.0251, 0.0000 ],
