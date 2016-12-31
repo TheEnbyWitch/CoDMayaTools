@@ -977,9 +977,9 @@ def ExportXModel(filePath):
 			WriteJointData(f, joint[1])
 	
 	# Write verts
-	f.write("\nNUMVERTS %i\n" % len(shapes["verts"]))
+	f.write("\nNUMVERTS32 %i\n" % len(shapes["verts"]))
 	for i, vert in enumerate(shapes["verts"]):
-		f.write("VERT %i\n" % i)
+		f.write("VERT32 %i\n" % i)
 		f.write("OFFSET %f, %f, %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
 		f.write("BONES %i\n" % max(len(vert[1]), 1))
 		if len(vert[1]) > 0:
@@ -992,9 +992,9 @@ def ExportXModel(filePath):
 	# Write faces
 	f.write("NUMFACES %i\n" % len(shapes["faces"]))
 	for j, face in enumerate(shapes["faces"]):
-		f.write("TRI %i %i 0 0\n" % (face[0], face[1]))
+		f.write("TRI16 %i %i 0 0\n" % (face[0], face[1]))
 		for i in range(0, 3):
-			f.write("VERT %i\n" % face[2][i])
+			f.write("VERT32 %i\n" % face[2][i])
 			f.write("NORMAL %f %f %f\n" % (face[5][i].x, face[5][i].y, face[5][i].z))
 			f.write("COLOR %f %f %f %f\n" % (face[4][i].r, face[4][i].g, face[4][i].b, face[4][i].a))
 			f.write("UV 1 %f %f\n" % (face[3][i][0], face[3][i][1]))
