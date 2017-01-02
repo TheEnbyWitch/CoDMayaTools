@@ -1574,9 +1574,9 @@ def ExportXCam(filePath):
 		name = name[len(name)-1]
 		f.write("""{
 			"name" : "%s",
-			"index" : "%d",
+			"index" : %d,
 			"type" : "Perspective",
-			"aperture" : "FOCAL_LENGTH", """ % (name,i))
+			"aperture" : "FOCAL_LENGTH", """ % (name,i)) # why did I make the cam index a string and not an int? linker bitches about that
 		WriteCameraData(f, camera[1])
 		f.write(",\n")
 		WriteNodeFloat(f, "aspectratio", 16.0/9.0)
