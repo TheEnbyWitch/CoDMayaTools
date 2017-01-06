@@ -7,6 +7,7 @@
 
 ## Installation:
 1) Download the [repository](https://github.com/Ray1235/CoDMayaTools/archive/master.zip) or just the [CoDMayaTools.py](https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/CoDMayaTools.py) file (right click & save). You'll only need that single file.
+
 2) Copy CoDMayaTools.py to:
 ```
 <USER>\Documents\maya\<Your maya version>\scripts
@@ -17,5 +18,7 @@
 python("import CoDMayaTools")
 ```
 4) Save and close the file and launch Maya
+
 5) First-time config will occur. The plugin will ask you for your game's root directory and if you'll be using Export2Bin.
+
 6) You're all set! Be sure to visit this repo often for updates!
