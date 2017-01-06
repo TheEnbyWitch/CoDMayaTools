@@ -55,6 +55,9 @@
 #	* (Hopyfully) Fixed Export2Bin and should now work and convert in same dir.
 # VERSION 2.4
 #   * Added basic XCAM_EXPORT support
+#	* Added support for CoD1 (untested)
+#	* Added support for BO3 xmodel_export keywords
+#	* Added an option to automatically rename tag_weapon and j_gun joints
 #
 
 # TODO: Speed up joint weight loading
@@ -950,7 +953,10 @@ def ExportXModel(filePath):
 		f.write("// Source filename: Unsaved\n")
 	f.write("// Export time: %s\n\n" % datetime.datetime.now().strftime("%a %b %d %Y, %H:%M:%S")) 
 	f.write("MODEL\n")
-	f.write("VERSION 6\n\n")
+	if CoD1Mode():
+		f.write("VERSION 5\n\n")
+	else:
+		f.write("VERSION 6\n\n")
 	
 	# Write joints
 	if len(joints) == 0:
@@ -968,19 +974,32 @@ def ExportXModel(filePath):
 		f.write("NUMBONES %i\n" % len(joints))
 		for i, joint in enumerate(joints):
 			name = joint[1].partialPathName().split("|")
- 			name = name[len(name)-1].split(":") # Remove namespace prefixes
-			name = name[len(name)-1]
+			name = name[len(name) - 1].split(":") # Remove namespace prefixes
+			name = name[len(name) - 1]
+			if name == "tag_weapon" and UseOption("AutoRename"):
+				name = "tag_weapon_right"
+			elif name == "j_gun" and UseOption("AutoRename"):
+				name = "tag_weapon"
 			f.write("BONE %i %i \"%s\"\n" % (i, joint[0], name))
 		
 		for i, joint in enumerate(joints):
 			f.write("\nBONE %i\n" % i)
 			WriteJointData(f, joint[1])
-	
+
 	# Write verts
-	f.write("\nNUMVERTS %i\n" % len(shapes["verts"]))
+	if UseOption("BO3Mode"):
+		f.write("\nNUMVERTS32 %i\n" % len(shapes["verts"]))
+	else:
+		f.write("\nNUMVERTS %i\n" % len(shapes["verts"]))
 	for i, vert in enumerate(shapes["verts"]):
-		f.write("VERT %i\n" % i)
-		f.write("OFFSET %f, %f, %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
+		if UseOption("BO3Mode"):
+			f.write("VERT32 %i\n" % i)
+		else:
+			f.write("VERT32 %i\n" % i)
+		if CoD1Mode():
+			f.write("OFFSET %f %f %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
+		else:
+			f.write("OFFSET %f, %f, %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
 		f.write("BONES %i\n" % max(len(vert[1]), 1))
 		if len(vert[1]) > 0:
 			for bone in vert[1]:
@@ -992,9 +1011,15 @@ def ExportXModel(filePath):
 	# Write faces
 	f.write("NUMFACES %i\n" % len(shapes["faces"]))
 	for j, face in enumerate(shapes["faces"]):
-		f.write("TRI %i %i 0 0\n" % (face[0], face[1]))
+		if UseOption("BO3Mode"):
+			f.write("TRI16 %i %i 0 0\n" % (face[0], face[1]))
+		else:
+			f.write("TRI %i %i 0 0\n" % (face[0], face[1]))
 		for i in range(0, 3):
-			f.write("VERT %i\n" % face[2][i])
+			if UseOption("BO3Mods"):
+				f.write("VERT32 %i\n" % face[2][i])
+			else:
+				f.write("VERT %i\n" % face[2][i])
 			f.write("NORMAL %f %f %f\n" % (face[5][i].x, face[5][i].y, face[5][i].z))
 			f.write("COLOR %f %f %f %f\n" % (face[4][i].r, face[4][i].g, face[4][i].b, face[4][i].a))
 			f.write("UV 1 %f %f\n" % (face[3][i][0], face[3][i][1]))
@@ -1007,28 +1032,38 @@ def ExportXModel(filePath):
 	
 	# Write materials
 	f.write("\nNUMMATERIALS %i\n" % len(shapes["materials"]))
-	for i, material in enumerate(shapes["materials"]):
-		f.write("MATERIAL %i \"%s\" \"%s\" \"%s\"\n" % (i, material[0].split(":")[-1], "Lambert", material[1]))
+	if CoD1Mode():
+		for i, material in enumerate(shapes["materials"]):
+			f.write("MATERIAL %i \"%s\"\n" % (i, material[0].split(":")[-1]))
+	else:
+		for i, material in enumerate(shapes["materials"]):
+			f.write("MATERIAL %i \"%s\" \"%s\" \"%s\"\n" % (i, material[0].split(":")[-1], "Lambert", material[1]))
 		
-		# According to the Modrepository page on the XModel format, the following values don't matter
-		f.write("COLOR 0.000000 0.000000 0.000000 1.000000\n"
-				"TRANSPARENCY 0.000000 0.000000 0.000000 1.000000\n"
-				"AMBIENTCOLOR 0.000000 0.000000 0.000000 1.000000\n"
-				"INCANDESCENCE 0.000000 0.000000 0.000000 1.000000\n"
-				"COEFFS 0.800000 0.000000\n"
-				"GLOW 0.000000 0\n"
-				"REFRACTIVE 6 1.000000\n"
-				"SPECULARCOLOR -1.000000 -1.000000 -1.000000 1.000000\n"
-				"REFLECTIVECOLOR -1.000000 -1.000000 -1.000000 1.000000\n"
-				"REFLECTIVE -1 -1.000000\n"
-				"BLINN -1.000000 -1.000000\n"
-				"PHONG -1.000000\n\n")
+			# According to the Modrepository page on the XModel format, the following values don't matter
+			f.write("COLOR 0.000000 0.000000 0.000000 1.000000\n"
+					"TRANSPARENCY 0.000000 0.000000 0.000000 1.000000\n"
+					"AMBIENTCOLOR 0.000000 0.000000 0.000000 1.000000\n"
+					"INCANDESCENCE 0.000000 0.000000 0.000000 1.000000\n"
+					"COEFFS 0.800000 0.000000\n"
+					"GLOW 0.000000 0\n"
+					"REFRACTIVE 6 1.000000\n"
+					"SPECULARCOLOR -1.000000 -1.000000 -1.000000 1.000000\n"
+					"REFLECTIVECOLOR -1.000000 -1.000000 -1.000000 1.000000\n"
+					"REFLECTIVE -1 -1.000000\n"
+					"BLINN -1.000000 -1.000000\n"
+					"PHONG -1.000000\n\n")
 		
 	f.close()
 	ProgressBarStep()
 	cmds.refresh()
 	if UseExport2Bin():
 		RunExport2Bin(filePath)
+
+def CoD1Mode():
+	if not UseOption("BO3Mode") and UseOption("Legacy"):
+		return True
+	else:
+		return False
 
 def GetMaterialsFromMesh(mesh, dagPath):
 	textures = {}
@@ -1366,6 +1401,10 @@ def ExportXAnim(filePath):
 		name = joint[1].partialPathName().split("|")
 		name = name[len(name)-1].split(":") # Remove namespace prefixes
 		name = name[len(name)-1]
+		if name == "tag_weapon" and UseOption("AutoRename"):
+			name = "tag_weapon_right"
+		elif name == "j_gun" and UseOption("AutoRename"):
+			name = "tag_weapon"
 		f.write("PART %i \"%s\"\n" % (i, name))
 	
 	fLength = ((frameEnd-frameStart+1) / multiplier)
@@ -2305,8 +2344,8 @@ def CreateXCamWindow():
 	framesEndField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FrameEndField", height=21, width=35, minValue=0, changeCommand=XCamWindow_UpdateFrameRange, annotation="Ending frame to export (inclusive)")
 	fpsLabel = cmds.text(label="FPS:")
 	fpsField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FPSField", height=21, width=35, value=1, minValue=1, changeCommand=XCamWindow_UpdateFramerate, annotation="Animation FPS")
-	qualityLabel = cmds.text(label="Quality (0-10)", annotation="Quality of the animation, higher values result in less jitter but produce larger files. Default is 0")
-	qualityField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_qualityField", height=21, width=35, value=0, minValue=0, maxValue=10, step=1, changeCommand=XCamWindow_UpdateMultiplier, annotation="Quality of the animation, higher values result in less jitter but produce larger files.")
+	#qualityLabel = cmds.text(label="Quality (0-10)", annotation="Quality of the animation, higher values result in less jitter but produce larger files. Default is 0")
+	#qualityField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_qualityField", height=21, width=35, value=0, minValue=0, maxValue=10, step=1, changeCommand=XCamWindow_UpdateMultiplier, annotation="Quality of the animation, higher values result in less jitter but produce larger files.")
 	
 	notetracksLabel = cmds.text(label="Notetrack:", annotation="Notetrack info for the animation")
 	noteList = cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", allowMultiSelection=False, selectCommand=XCamWindow_SelectNote, annotation="List of notes in the notetrack")
@@ -2328,18 +2367,18 @@ def CreateXCamWindow():
 	exportMultipleSlotsButton = cmds.button(label="Export Multiple Slots", command="CoDMayaTools.GeneralWindow_ExportMultiple('xcam')", annotation="Automatically export multiple slots at once, using each slot's saved selection")
 	exportInMultiExportCheckbox = cmds.checkBox(OBJECT_NAMES['xcam'][0]+"_UseInMultiExportCheckBox", label="Use current slot for Export Multiple", changeCommand="CoDMayaTools.GeneralWindow_ExportInMultiExport('xcam')", annotation="Check this make the 'Export Multiple Slots' button export this slot")
 	IgnoreUslessNotes = cmds.checkBox("Scoba_IgnoreUslessNotes", label="Ignore Useless Notes like reload_large, etc.", annotation="Check this if you want to ignre notes like reload_large, etc.", value=True)
-	ReverseAnimation = cmds.checkBox("CoDMAYA_ReverseAnim", label="Export Animation Reversed", annotation="Check this if you want to export the anim. backwards. Usefule for reversing to make opposite sprints, etc.", value=False)
+	#ReverseAnimation = cmds.checkBox("CoDMAYA_ReverseAnim", label="Export Animation Reversed", annotation="Check this if you want to export the anim. backwards. Usefule for reversing to make opposite sprints, etc.", value=False)
 	# Setup form
 	cmds.formLayout(form, edit=True,
 		attachForm=[(slotDropDown, 'top', 6), (slotDropDown, 'left', 10), (slotDropDown, 'right', 10),
 					(separator1, 'left', 0), (separator1, 'right', 0),
 					(framesLabel, 'left', 10),
 					(fpsLabel, 'left', 10),
-					(qualityLabel, 'left', 10),
+					#(qualityLabel, 'left', 10),
 					(notetracksLabel, 'left', 10),
 					(noteList, 'left', 10),
 					(IgnoreUslessNotes, 'left', 10),
-					(ReverseAnimation, 'left', 10),
+					#(ReverseAnimation, 'left', 10),
 					(addNoteButton, 'right', 10),
 					(ReadNotesButton, 'right', 10),
 					(RenameNoteTrack, 'right', 10),
@@ -2361,12 +2400,12 @@ def CreateXCamWindow():
 						(framesEndField, 'top', 5, separator1), (framesEndField, 'left', 4, framesToLabel),
 						(fpsLabel, 'top', 8, framesStartField),
 						(fpsField, 'top', 5, framesStartField), (fpsField, 'left', 21, fpsLabel),
-						(qualityLabel, 'top', 8, fpsField),
-						(qualityField, 'top', 5, fpsField), (qualityField, 'left', 21, qualityLabel),
-						(notetracksLabel, 'top', 5, qualityLabel),
-						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 60, separator2),
+						#(qualityLabel, 'top', 8, fpsField),
+						#(qualityField, 'top', 5, fpsField), (qualityField, 'left', 21, qualityLabel),
+						(notetracksLabel, 'top', 5, fpsLabel),
+						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 35, separator2),
 						(IgnoreUslessNotes, 'top', 10, noteList), (IgnoreUslessNotes, 'right', 10, removeNoteButton),
-						(ReverseAnimation, 'top', 10, IgnoreUslessNotes), (ReverseAnimation, 'right', 10, removeNoteButton),
+						#(ReverseAnimation, 'top', 10, IgnoreUslessNotes), (ReverseAnimation, 'right', 10, removeNoteButton),
 						(addNoteButton, 'top', 5, notetracksLabel),
 						(ReadNotesButton, 'top', 5, addNoteButton),
 						(RenameNoteTrack, 'top', 5, ReadNotesButton),
@@ -2881,6 +2920,13 @@ def AboutWindow():
 		GoToForumTopic()
 	elif result == "CoD File Formats":
 		webbrowser.open("http://aidanshafran.com/codmayatools/codformats.html")
+
+def LegacyWindow():
+	result = cmds.confirmDialog(message="""CoD1 mode exports models that are compatible with CoD1.
+When this mode is disabled, the plugin will export models that are compatible with CoD2 and newer.
+
+BO3 Mode is only supported in BO3, but it lets you have models with >65535 vertices.
+BO3 Mode overrides CoD1 mode if active.""", button=['OK'], defaultButton='OK', title="Legacy options")
 		
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # --------------------------------------------------------------------------- Versioning ---------------------------------------------------------------------------
@@ -3147,6 +3193,61 @@ def ForceExport2Bin(yesno):
 	reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, yesno)
 	reg.CloseKey(storageKey)
 	CreateMenu()
+
+# Support for custom options, so I don't have to make new funca
+def UseOption(name, default="off"):
+	bE2B = default
+	try:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
+		bE2B = reg.QueryValueEx(storageKey, "Use%s" % name)[0]
+		reg.CloseKey(storageKey)
+	except WindowsError:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
+		reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, "off")
+		reg.CloseKey(storageKey)
+
+	if bE2B == "on":
+		res = True
+	else:
+		res = False
+
+	return res
+
+def ToggleOption(name, default="off"):
+	bE2B = default
+	try:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
+		bE2B = reg.QueryValueEx(storageKey, "Use%s" % name)[0]
+		reg.CloseKey(storageKey)
+	except WindowsError:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
+		reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, "off")
+		reg.CloseKey(storageKey)
+
+	if bE2B == "off":
+		bE2B = "on"
+	else:
+		bE2B = "off"
+
+	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
+	reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, bE2B)
+	reg.CloseKey(storageKey)
+	CreateMenu()
+    
+def ForceOption(name, yesno):
+	try:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
+		bE2B = reg.QueryValueEx(storageKey, "Use%s" % name)[0]
+		reg.CloseKey(storageKey)
+	except WindowsError:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
+		reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, "off")
+		reg.CloseKey(storageKey)
+
+	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
+	reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, yesno)
+	reg.CloseKey(storageKey)
+	CreateMenu()
 	
 #def SetGame(name):
 #	currentGame = name
@@ -3260,6 +3361,13 @@ def getObjectByAlias(aname):
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------ Init ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+def AddToggleableOption(name, label):
+    if UseOption(name):
+        cmds.menuItem(label="%s: on" % label, command="CoDMayaTools.ToggleOption('%s')" % name)
+    else:
+        cmds.menuItem(label="%s: off" % label, command="CoDMayaTools.ToggleOption('%s')" % name)
+
+
 def CreateMenu():
 	cmds.setParent(mel.eval("$temp1=$gMainWindow"))
 	
@@ -3278,6 +3386,7 @@ def CreateMenu():
 	cmds.menuItem(label="Create New Gunsleeve Maya File", command=CreateNewGunsleeveMayaFile)
 	cmds.menuItem(label="Create New ViewModel Rig File", command=CreateNewViewmodelRigFile)
 	cmds.menuItem(label="Switch Gun in Current Rig File", command=SwitchGunInCurrentRigFile)
+	AddToggleableOption("AutoRename","Automatically rename joints")
 	cmds.setParent(menu, menu=True)
 	
 	# Import tools
@@ -3331,7 +3440,10 @@ def CreateMenu():
 		cmds.menuItem(label="Export2Bin: off", command="CoDMayaTools.ToggleE2B()")
 	cmds.menuItem(label="Set Path to Export2Bin", command="CoDMayaTools.SetExport2Bin()")
 	cmds.menuItem(divider=True)
-	
+	AddToggleableOption("Legacy", "CoD1 Mode")
+	AddToggleableOption("BO3Keywords", "BO3 Mode")
+	cmds.menuItem(label="What are those Legacy options?", command="CoDMayaTools.LegacyWindow()")
+	cmds.menuItem(divider=True)
 	# For easy script updating
 	cmds.menuItem(label="Reload Script", command="reload(CoDMayaTools)")
 	
@@ -3369,3 +3481,5 @@ except WindowsError:
 	else:
 		ForceExport2Bin("off")
 	cmds.confirmDialog(message="You're set! You can now export models and anims to any CoD!")
+
+print "CoDMayaTools initialized."
