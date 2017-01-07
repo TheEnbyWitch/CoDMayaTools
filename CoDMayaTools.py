@@ -995,7 +995,7 @@ def ExportXModel(filePath):
 		if UseOption("BO3Mode"):
 			f.write("VERT32 %i\n" % i)
 		else:
-			f.write("VERT32 %i\n" % i)
+			f.write("VERT %i\n" % i)
 		if CoD1Mode():
 			f.write("OFFSET %f %f %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
 		else:
@@ -1016,7 +1016,7 @@ def ExportXModel(filePath):
 		else:
 			f.write("TRI %i %i 0 0\n" % (face[0], face[1]))
 		for i in range(0, 3):
-			if UseOption("BO3Mods"):
+			if UseOption("BO3Mode"):
 				f.write("VERT32 %i\n" % face[2][i])
 			else:
 				f.write("VERT %i\n" % face[2][i])
