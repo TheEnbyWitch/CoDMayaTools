@@ -19,7 +19,7 @@
 3) Open usersetup.mel (create one if it doesn't exist) and paste this
 
 ```
-python("import CoDMayaTools")
+python("import CoDMayaTools");
 ```
 
 4) Save and close the file and launch Maya
