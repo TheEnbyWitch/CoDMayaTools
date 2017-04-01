@@ -953,7 +953,9 @@ def ExportXModel(filePath):
 		f.write("// Source filename: Unsaved\n")
 	f.write("// Export time: %s\n\n" % datetime.datetime.now().strftime("%a %b %d %Y, %H:%M:%S")) 
 	f.write("MODEL\n")
-	if CoD1Mode():
+	if UseOption("BO3Mode"):
+		f.write("VERSION 7\n\n")
+	else if CoD1Mode():
 		f.write("VERSION 5\n\n")
 	else:
 		f.write("VERSION 6\n\n")
