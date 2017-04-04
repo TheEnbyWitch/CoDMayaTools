@@ -955,7 +955,7 @@ def ExportXModel(filePath):
 	f.write("MODEL\n")
 	if UseOption("BO3Mode"):
 		f.write("VERSION 7\n\n")
-	else if CoD1Mode():
+	elif CoD1Mode():
 		f.write("VERSION 5\n\n")
 	else:
 		f.write("VERSION 6\n\n")
