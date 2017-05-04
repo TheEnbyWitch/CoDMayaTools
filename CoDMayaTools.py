@@ -1062,7 +1062,7 @@ def ExportXModel(filePath):
 		RunExport2Bin(filePath)
 
 def CoD1Mode():
-	if not UseOption("BO3Mode") and UseOption("Legacy"):
+	if (not UseOption("BO3Mode")) and UseOption("Legacy"):
 		return True
 	else:
 		return False
