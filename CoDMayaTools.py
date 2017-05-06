@@ -3443,7 +3443,7 @@ def CreateMenu():
 	cmds.menuItem(label="Set Path to Export2Bin", command="CoDMayaTools.SetExport2Bin()")
 	cmds.menuItem(divider=True)
 	AddToggleableOption("Legacy", "CoD1 Mode")
-	AddToggleableOption("BO3Keywords", "BO3 Mode")
+	AddToggleableOption("BO3Mode", "BO3 Mode")
 	cmds.menuItem(label="What are those Legacy options?", command="CoDMayaTools.LegacyWindow()")
 	cmds.menuItem(divider=True)
 	# For easy script updating
