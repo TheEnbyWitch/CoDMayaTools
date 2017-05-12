@@ -1961,7 +1961,7 @@ def CreateXAnimWindow():
 	
 	exportMultipleSlotsButton = cmds.button(label="Export Multiple Slots", command="CoDMayaTools.GeneralWindow_ExportMultiple('xanim')", annotation="Automatically export multiple slots at once, using each slot's saved selection")
 	exportInMultiExportCheckbox = cmds.checkBox(OBJECT_NAMES['xanim'][0]+"_UseInMultiExportCheckBox", label="Use current slot for Export Multiple", changeCommand="CoDMayaTools.GeneralWindow_ExportInMultiExport('xanim')", annotation="Check this make the 'Export Multiple Slots' button export this slot")
-	IgnoreUslessNotes = cmds.checkBox("Scoba_IgnoreUslessNotes", label="Ignore Useless Notes like reload_large, etc.", annotation="Check this if you want to ignre notes like reload_large, etc.", value=True)
+	IgnoreUslessNotes = cmds.checkBox("CoDMAYA_IgnoreUslessNotes", label="Ignore Useless Notes like reload_large, etc.", annotation="Check this if you want to ignre notes like reload_large, etc.", value=True)
 	ReverseAnimation = cmds.checkBox("CoDMAYA_ReverseAnim", label="Export Animation Reversed", annotation="Check this if you want to export the anim. backwards. Usefule for reversing to make opposite sprints, etc.", value=False)
 	# Setup form
 	cmds.formLayout(form, edit=True,
@@ -2019,7 +2019,7 @@ def CreateXAnimWindow():
 						])
 
 def XAnimWindow_SetFrames(required_parameter):
-    start = cmds.playbackOptions(minTime=True, query=True) - 1
+    start = cmds.playbackOptions(minTime=True, query=True)
     end = cmds.playbackOptions(maxTime=True, query=True)  # Query start and end froms.
     cmds.intField(OBJECT_NAMES['xanim'][0] + "_FrameStartField", edit=True, value=start)
     cmds.intField(OBJECT_NAMES['xanim'][0] + "_FrameEndField", edit=True, value=end)
@@ -2068,102 +2068,38 @@ def ReadXanimNotes(required_parameter):
 	existingItems = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", query=True, allItems=True)
 	noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
 
-	isWraithAnim = False
-	isSEAnim = False
+	notetracks = ["WraithNotes", "SENotes", "NoteTrack"]
 
-	isNotWraithAnimButHasNoteTrack = False
-	
-	if cmds.objExists('WraithNotes'):
-		isWraithAnim = True
-		
-	if cmds.objExists('SENotes'):
-		isSEAnim = True
+	for notetrack in notetracks:
+		if cmds.objExists(notetrack):
+			cmds.select( clear=True )
+			cmds.select( notetrack, hi=True )
 
-	if cmds.objExists('NoteTrack'):
-		isNotWraithAnimButHasNoteTrack = True
+			notes = cmds.ls( selection=True, type="transform" ) # Grab what is selected.
 
-	if cmds.objExists('WraithNotes') and cmds.objExists('NoteTrack'):
-		cmds.confirmDialog( title='ERROR', message='WraithNotes and NoteTrack both exist in this scene, please delete one and try again.' , button=['Ok'], defaultButton='Ok')
-		return
-
-
-	if isSEAnim:
-		cmds.select( clear=True )
-		cmds.select( 'SENotes', hi=True )
-		cmds.select( 'SENotes', d=True ) 
-
-		notes = cmds.ls( selection=True ) # Grab what is selected.
-
-		for NoteTrack in notes: # Go through each one.
-			if not "Shape" in NoteTrack: # Avoid ones with Shape at end.
-				for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
-					IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
-										NoteTrack == "reload_large" 
-									 or NoteTrack == "reload_small" 
-									 or NoteTrack == "reload_medium"
-									 or NoteTrack == "clip_out"
-									 or NoteTrack == "clip_in"
-									 or NoteTrack == "rechamber_release"
-									 or NoteTrack == "rechamber_pull_back"
-									 or NoteTrack == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
-
-									)
-					if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
-						continue
-					noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
-					cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-					cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
-	
-	elif isWraithAnim:
-		cmds.select( clear=True )
-		cmds.select( 'WraithNotes', hi=True )
-		cmds.select( 'WraithNotes', d=True ) # Select WraithNotes and it's children and then deselect it to avoid issues.
-
-		notes = cmds.ls( selection=True ) # Grab what is selected.
-
-		for NoteTrack in notes: # Go through each one.
-			if not "Shape" in NoteTrack: # Avoid ones with Shape at end.
-				for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
-					IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
-										NoteTrack == "reload_large" 
-									 or NoteTrack == "reload_small" 
-									 or NoteTrack == "reload_medium"
-									 or NoteTrack == "clip_out"
-									 or NoteTrack == "clip_in"
-									 or NoteTrack == "rechamber_release"
-									 or NoteTrack == "rechamber_pull_back"
-									 or NoteTrack == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
-
-									)
-					if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
-						continue
-					noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
-					cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-					cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
-	elif isNotWraithAnimButHasNoteTrack:
-		for note in cmds.keyframe("NoteTrack", attribute="MainNote", sl=False, q=True, tc=True): # cmds.keyframe("NoteTrack", attribute="MainNote", sl=False, q=True, tc=True) lists all the keyframes for this object's attribute, so we loop through it.
-			noteName =  cmds.getAttr('NoteTrack.MainNote',x=True, asString=True, t=note) # Here is where we grab the Note from the attribute "MainNote", asString allows us to return it as string instead of intiger.
-			IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
-								noteName == "reload_large" 
-							 or noteName == "reload_small" 
-							 or noteName == "reload_medium"
-							 or noteName == "clip_out"
-							 or noteName == "clip_in"
-							 or noteName == "rechamber_release"
-							 or noteName == "rechamber_pull_back"
-							 or noteName == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
-							)
-			if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
-				continue
-			if "sndnt#" in noteName:
-				noteName = noteName[6:] # This essentially, in laymans terms, strips the notetrack's name of the first 6 characters if it contains "sndnt#" in the name.
-			if "rmbnt#" in noteName:
-				noteName = noteName[6:]
-			noteList += "%s:%i," % (noteName, note) # Add Notes to Aidan's list.
-			cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-			cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=noteName, selectIndexedItem=len((existingItems or []))+1)
-	else:
-		cmds.confirmDialog( title='ERROR', message='Can\'t find Notetracks for Wriath Anim or Normal anim.' , button=['Ok'], defaultButton='Ok') 
+			for NoteTrack in notes: # Go through each one.
+				try:
+					for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
+						IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
+											NoteTrack == "reload_large" 
+										 or NoteTrack == "reload_small" 
+										 or NoteTrack == "reload_medium"
+										 or NoteTrack == "clip_out"
+										 or NoteTrack == "clip_in"
+										 or NoteTrack == "rechamber_release"
+										 or NoteTrack == "rechamber_pull_back"
+										)
+						if cmds.checkBox("CoDMAYA_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
+							continue
+						if NoteTrack == "end":
+							continue
+						noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
+						cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+						cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
+				except Exception as e:
+					if NoteTrack != notetrack:
+						print("Error has occured while reading note: %s, the error was: '%s', Skipping." % (NoteTrack, e))
+					pass
 
 	XAnimWindow_SelectNote()
 
@@ -2371,7 +2307,7 @@ def CreateXCamWindow():
 	
 	exportMultipleSlotsButton = cmds.button(label="Export Multiple Slots", command="CoDMayaTools.GeneralWindow_ExportMultiple('xcam')", annotation="Automatically export multiple slots at once, using each slot's saved selection")
 	exportInMultiExportCheckbox = cmds.checkBox(OBJECT_NAMES['xcam'][0]+"_UseInMultiExportCheckBox", label="Use current slot for Export Multiple", changeCommand="CoDMayaTools.GeneralWindow_ExportInMultiExport('xcam')", annotation="Check this make the 'Export Multiple Slots' button export this slot")
-	IgnoreUslessNotes = cmds.checkBox("Scoba_IgnoreUslessNotes", label="Ignore Useless Notes like reload_large, etc.", annotation="Check this if you want to ignre notes like reload_large, etc.", value=True)
+	IgnoreUslessNotes = cmds.checkBox("CoDMAYA_IgnoreUslessNotes", label="Ignore Useless Notes like reload_large, etc.", annotation="Check this if you want to ignre notes like reload_large, etc.", value=True)
 	#ReverseAnimation = cmds.checkBox("CoDMAYA_ReverseAnim", label="Export Animation Reversed", annotation="Check this if you want to export the anim. backwards. Usefule for reversing to make opposite sprints, etc.", value=False)
 	# Setup form
 	cmds.formLayout(form, edit=True,
@@ -2430,7 +2366,7 @@ def CreateXCamWindow():
 
 
 def XCamWindow_SetFrames(required_parameter):
-    start = cmds.playbackOptions(minTime=True, query=True) - 1
+    start = cmds.playbackOptions(minTime=True, query=True)
     end = cmds.playbackOptions(maxTime=True, query=True)  # Query start and end froms.
     cmds.intField(OBJECT_NAMES['xcam'][0] + "_FrameStartField", edit=True, value=start)
     cmds.intField(OBJECT_NAMES['xcam'][0] + "_FrameEndField", edit=True, value=end)
@@ -2475,109 +2411,45 @@ def XCamWindow_AddNote(required_parameter):
 	XCamWindow_SelectNote()
 
 def ReadXcamNotes(required_parameter):
+
 	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
 	existingItems = cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", query=True, allItems=True)
 	noteList = cmds.getAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex)) or ""
 
-	isWraithAnim = False
-	isSEAnim = False
+	notetracks = ["WraithNotes", "SENotes", "NoteTrack"]
 
-	isNotWraithAnimButHasNoteTrack = False
-	
-	if cmds.objExists('WraithNotes'):
-		isWraithAnim = True
-		
-	if cmds.objExists('SENotes'):
-		isSEAnim = True
+	for notetrack in notetracks:
+		if cmds.objExists(notetrack):
+			cmds.select( clear=True )
+			cmds.select( notetrack, hi=True )
 
-	if cmds.objExists('NoteTrack'):
-		isNotWraithAnimButHasNoteTrack = True
+			notes = cmds.ls( selection=True, type="transform" ) # Grab what is selected.
 
-	if cmds.objExists('WraithNotes') and cmds.objExists('NoteTrack'):
-		cmds.confirmDialog( title='ERROR', message='WraithNotes and NoteTrack both exist in this scene, please delete one and try again.' , button=['Ok'], defaultButton='Ok')
-		return
+			for NoteTrack in notes: # Go through each one.
+				try:
+					for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
+						IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
+											NoteTrack == "reload_large" 
+										 or NoteTrack == "reload_small" 
+										 or NoteTrack == "reload_medium"
+										 or NoteTrack == "clip_out"
+										 or NoteTrack == "clip_in"
+										 or NoteTrack == "rechamber_release"
+										 or NoteTrack == "rechamber_pull_back"
+										)
+						if cmds.checkBox("CoDMAYA_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
+							continue
+						if NoteTrack == "end":
+							continue
+						noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
+						cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+						cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
+				except Exception as e:
+					if NoteTrack != notetrack:
+						print("Error has occured while reading note: %s, the error was: '%s', Skipping." % (NoteTrack, e))
+					pass
 
-
-	if isSEAnim:
-		cmds.select( clear=True )
-		cmds.select( 'SENotes', hi=True )
-		cmds.select( 'SENotes', d=True ) 
-
-		notes = cmds.ls( selection=True ) # Grab what is selected.
-
-		for NoteTrack in notes: # Go through each one.
-			if not "Shape" in NoteTrack: # Avoid ones with Shape at end.
-				for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
-					IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
-										NoteTrack == "reload_large" 
-									 or NoteTrack == "reload_small" 
-									 or NoteTrack == "reload_medium"
-									 or NoteTrack == "clip_out"
-									 or NoteTrack == "clip_in"
-									 or NoteTrack == "rechamber_release"
-									 or NoteTrack == "rechamber_pull_back"
-									 or NoteTrack == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
-
-									)
-					if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
-						continue
-					noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
-					cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-					cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
-	
-	elif isWraithAnim:
-		cmds.select( clear=True )
-		cmds.select( 'WraithNotes', hi=True )
-		cmds.select( 'WraithNotes', d=True ) # Select WraithNotes and it's children and then deselect it to avoid issues.
-
-		notes = cmds.ls( selection=True ) # Grab what is selected.
-
-		for NoteTrack in notes: # Go through each one.
-			if not "Shape" in NoteTrack: # Avoid ones with Shape at end.
-				for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
-					IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
-										NoteTrack == "reload_large" 
-									 or NoteTrack == "reload_small" 
-									 or NoteTrack == "reload_medium"
-									 or NoteTrack == "clip_out"
-									 or NoteTrack == "clip_in"
-									 or NoteTrack == "rechamber_release"
-									 or NoteTrack == "rechamber_pull_back"
-									 or NoteTrack == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
-
-									)
-					if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
-						continue
-					noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
-					cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-					cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
-	elif isNotWraithAnimButHasNoteTrack:
-		for note in cmds.keyframe("NoteTrack", attribute="MainNote", sl=False, q=True, tc=True): # cmds.keyframe("NoteTrack", attribute="MainNote", sl=False, q=True, tc=True) lists all the keyframes for this object's attribute, so we loop through it.
-			noteName =  cmds.getAttr('NoteTrack.MainNote',x=True, asString=True, t=note) # Here is where we grab the Note from the attribute "MainNote", asString allows us to return it as string instead of intiger.
-			IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
-								noteName == "reload_large" 
-							 or noteName == "reload_small" 
-							 or noteName == "reload_medium"
-							 or noteName == "clip_out"
-							 or noteName == "clip_in"
-							 or noteName == "rechamber_release"
-							 or noteName == "rechamber_pull_back"
-							 or noteName == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
-							)
-			if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
-				continue
-			if "sndnt#" in noteName:
-				noteName = noteName[6:] # This essentially, in laymans terms, strips the notetrack's name of the first 6 characters if it contains "sndnt#" in the name.
-			if "rmbnt#" in noteName:
-				noteName = noteName[6:]
-			noteList += "%s:%i," % (noteName, note) # Add Notes to Aidan's list.
-			cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-			cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, append=noteName, selectIndexedItem=len((existingItems or []))+1)
-	else:
-		cmds.confirmDialog( title='ERROR', message='Can\'t find Notetracks for Wriath Anim or Normal anim.' , button=['Ok'], defaultButton='Ok') 
-
-	XCamWindow_SelectNote()
-
+	XAnimWindow_SelectNote()
 
 def RenameXcamNotes(required_parameter):
 	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
