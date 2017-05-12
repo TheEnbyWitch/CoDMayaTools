@@ -1936,6 +1936,7 @@ def CreateXAnimWindow():
 	framesStartField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameStartField", height=21, width=35, minValue=0, changeCommand=XAnimWindow_UpdateFrameRange, annotation="Starting frame to export (inclusive)")
 	framesToLabel = cmds.text(label="to")
 	framesEndField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameEndField", height=21, width=35, minValue=0, changeCommand=XAnimWindow_UpdateFrameRange, annotation="Ending frame to export (inclusive)")
+	GrabFrames = cmds.button(label="Grab Frames", width=75, command=XAnimWindow_SetFrames, annotation="Get frame end and start from scene.")
 	fpsLabel = cmds.text(label="FPS:")
 	fpsField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FPSField", height=21, width=35, value=1, minValue=1, changeCommand=XAnimWindow_UpdateFramerate, annotation="Animation FPS")
 	qualityLabel = cmds.text(label="Quality (0-10)", annotation="Quality of the animation, higher values result in less jitter but produce larger files. Default is 0")
@@ -1992,6 +1993,7 @@ def CreateXAnimWindow():
 						(framesStartField, 'top', 5, separator1), (framesStartField, 'left', 4, framesLabel),
 						(framesToLabel, 'top', 8, separator1), (framesToLabel, 'left', 4+35+4, framesLabel),
 						(framesEndField, 'top', 5, separator1), (framesEndField, 'left', 4, framesToLabel),
+						(GrabFrames, 'top', 5, separator1), (GrabFrames, 'left', 4, framesEndField),
 						(fpsLabel, 'top', 8, framesStartField),
 						(fpsField, 'top', 5, framesStartField), (fpsField, 'left', 21, fpsLabel),
 						(qualityLabel, 'top', 8, fpsField),
@@ -2015,6 +2017,12 @@ def CreateXAnimWindow():
 						(getSavedSelectionButton, 'bottom', 5, separator3), (getSavedSelectionButton, 'right', 10, saveSelectionButton),
 						(separator3, 'bottom', 5, exportMultipleSlotsButton)
 						])
+
+def XAnimWindow_SetFrames(required_parameter):
+    start = cmds.playbackOptions(minTime=True, query=True) - 1
+    end = cmds.playbackOptions(maxTime=True, query=True)  # Query start and end froms.
+    cmds.intField(OBJECT_NAMES['xanim'][0] + "_FrameStartField", edit=True, value=start)
+    cmds.intField(OBJECT_NAMES['xanim'][0] + "_FrameEndField", edit=True, value=end)
 
 def XAnimWindow_UpdateFrameRange(required_parameter):
 	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
@@ -2351,6 +2359,7 @@ def CreateXCamWindow():
 	removeNoteButton = cmds.button(label="Remove Note", command=XCamWindow_RemoveNote, annotation="Remove the currently selected note from the notetrack")
 	noteFrameLabel = cmds.text(label="Frame:", annotation="The frame the currently selected note is applied to")
 	noteFrameField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_NoteFrameField", changeCommand=XCamWindow_UpdateNoteFrame, height=21, width=30, minValue=0, annotation="The frame the currently selected note is applied to")
+	GrabFrames = cmds.button(label="Grab Frames", width=75, command=XCamWindow_SetFrames, annotation="Get frame end and start from scene.")
 	
 	saveToLabel = cmds.text(label="Save to:", annotation="This is where .xcam_export is saved to")
 	saveToField = cmds.textField(OBJECT_NAMES['xcam'][0]+"_SaveToField", height=21, changeCommand="CoDMayaTools.GeneralWindow_SaveToField('xcam')", annotation="This is where .xcam_export is saved to")
@@ -2394,6 +2403,7 @@ def CreateXCamWindow():
 						(framesStartField, 'top', 5, separator1), (framesStartField, 'left', 4, framesLabel),
 						(framesToLabel, 'top', 8, separator1), (framesToLabel, 'left', 4+35+4, framesLabel),
 						(framesEndField, 'top', 5, separator1), (framesEndField, 'left', 4, framesToLabel),
+						(GrabFrames, 'top', 5, separator1), (GrabFrames, 'left', 4, framesEndField),
 						(fpsLabel, 'top', 8, framesStartField),
 						(fpsField, 'top', 5, framesStartField), (fpsField, 'left', 21, fpsLabel),
 						#(qualityLabel, 'top', 8, fpsField),
@@ -2417,6 +2427,13 @@ def CreateXCamWindow():
 						(getSavedSelectionButton, 'bottom', 5, separator3), (getSavedSelectionButton, 'right', 10, saveSelectionButton),
 						(separator3, 'bottom', 5, exportMultipleSlotsButton)
 						])
+
+
+def XCamWindow_SetFrames(required_parameter):
+    start = cmds.playbackOptions(minTime=True, query=True) - 1
+    end = cmds.playbackOptions(maxTime=True, query=True)  # Query start and end froms.
+    cmds.intField(OBJECT_NAMES['xcam'][0] + "_FrameStartField", edit=True, value=start)
+    cmds.intField(OBJECT_NAMES['xcam'][0] + "_FrameEndField", edit=True, value=end)
 
 def XCamWindow_UpdateFrameRange(required_parameter):
 	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
