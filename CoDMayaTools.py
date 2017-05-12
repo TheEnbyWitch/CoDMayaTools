@@ -953,9 +953,9 @@ def ExportXModel(filePath):
 		f.write("// Source filename: Unsaved\n")
 	f.write("// Export time: %s\n\n" % datetime.datetime.now().strftime("%a %b %d %Y, %H:%M:%S")) 
 	f.write("MODEL\n")
-	if UseOption("BO3Mode"):
+	if QueryToggableOption("BO3Mode"):
 		f.write("VERSION 7\n\n")
-	elif CoD1Mode():
+	elif QueryToggableOption("CoD1Mode"):
 		f.write("VERSION 5\n\n")
 	else:
 		f.write("VERSION 6\n\n")
@@ -978,9 +978,9 @@ def ExportXModel(filePath):
 			name = joint[1].partialPathName().split("|")
 			name = name[len(name) - 1].split(":") # Remove namespace prefixes
 			name = name[len(name) - 1]
-			if name == "tag_weapon" and UseOption("AutoRename"):
+			if name == "tag_weapon" and QueryToggableOption("AutomaticRename"):
 				name = "tag_weapon_right"
-			elif name == "j_gun" and UseOption("AutoRename"):
+			elif name == "j_gun" and QueryToggableOption("AutomaticRename"):
 				name = "tag_weapon"
 			f.write("BONE %i %i \"%s\"\n" % (i, joint[0], name))
 		
@@ -989,16 +989,16 @@ def ExportXModel(filePath):
 			WriteJointData(f, joint[1])
 
 	# Write verts
-	if UseOption("BO3Mode"):
+	if QueryToggableOption("BO3Mode"):
 		f.write("\nNUMVERTS32 %i\n" % len(shapes["verts"]))
 	else:
 		f.write("\nNUMVERTS %i\n" % len(shapes["verts"]))
 	for i, vert in enumerate(shapes["verts"]):
-		if UseOption("BO3Mode"):
+		if QueryToggableOption("BO3Mode"):
 			f.write("VERT32 %i\n" % i)
 		else:
 			f.write("VERT %i\n" % i)
-		if CoD1Mode():
+		if QueryToggableOption("CoD1Mode") and not QueryToggableOption("BO3Mode"):
 			f.write("OFFSET %f %f %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
 		else:
 			f.write("OFFSET %f, %f, %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
@@ -1013,12 +1013,12 @@ def ExportXModel(filePath):
 	# Write faces
 	f.write("NUMFACES %i\n" % len(shapes["faces"]))
 	for j, face in enumerate(shapes["faces"]):
-		if UseOption("BO3Mode"):
+		if QueryToggableOption("BO3Mode"):
 			f.write("TRI16 %i %i 0 0\n" % (face[0], face[1]))
 		else:
 			f.write("TRI %i %i 0 0\n" % (face[0], face[1]))
 		for i in range(0, 3):
-			if UseOption("BO3Mode"):
+			if QueryToggableOption("BO3Mode"):
 				f.write("VERT32 %i\n" % face[2][i])
 			else:
 				f.write("VERT %i\n" % face[2][i])
@@ -1034,7 +1034,7 @@ def ExportXModel(filePath):
 	
 	# Write materials
 	f.write("\nNUMMATERIALS %i\n" % len(shapes["materials"]))
-	if CoD1Mode():
+	if QueryToggableOption("CoD1Mode") and not QueryToggableOption("BO3Mode"):
 		for i, material in enumerate(shapes["materials"]):
 			f.write("MATERIAL %i \"%s\"\n" % (i, material[0].split(":")[-1]))
 	else:
@@ -1058,14 +1058,8 @@ def ExportXModel(filePath):
 	f.close()
 	ProgressBarStep()
 	cmds.refresh()
-	if UseExport2Bin():
+	if QueryToggableOption('E2B'):
 		RunExport2Bin(filePath)
-
-def CoD1Mode():
-	if (not UseOption("BO3Mode")) and UseOption("Legacy"):
-		return True
-	else:
-		return False
 
 def GetMaterialsFromMesh(mesh, dagPath):
 	textures = {}
@@ -1403,9 +1397,9 @@ def ExportXAnim(filePath):
 		name = joint[1].partialPathName().split("|")
 		name = name[len(name)-1].split(":") # Remove namespace prefixes
 		name = name[len(name)-1]
-		if name == "tag_weapon" and UseOption("AutoRename"):
+		if name == "tag_weapon" and QueryToggableOption("AutomaticRename"):
 			name = "tag_weapon_right"
-		elif name == "j_gun" and UseOption("AutoRename"):
+		elif name == "j_gun" and QueryToggableOption("AutomaticRename"):
 			name = "tag_weapon"
 		f.write("PART %i \"%s\"\n" % (i, name))
 	
@@ -1465,7 +1459,7 @@ def ExportXAnim(filePath):
 	ProgressBarStep()
 	cmds.refresh()
 
-	if UseExport2Bin():
+	if QueryToggableOption('E2B'):
 		RunExport2Bin(filePath)
 	
 def WriteDummyTargetModelBoneRoot(f, numframes):
@@ -3133,53 +3127,6 @@ def GetExport2Bin(skipSet=True):
 
 	return export2binpath
 
-def UseExport2Bin():
-	bE2B = "off"
-	try:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
-		bE2B = reg.QueryValueEx(storageKey, "UseExport2Bin")[0]
-		reg.CloseKey(storageKey)
-	except WindowsError:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-		reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, "off")
-		reg.CloseKey(storageKey)
-
-	if bE2B == "on":
-		res = True
-	else:
-		res = False
-
-	if GetExport2Bin() == "":
-		res = False
-
-	return res
-
-def ToggleE2B():
-	bE2B = "off"
-	try:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
-		bE2B = reg.QueryValueEx(storageKey, "UseExport2Bin")[0]
-		reg.CloseKey(storageKey)
-	except WindowsError:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-		reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, "off")
-		reg.CloseKey(storageKey)
-
-	if bE2B == "off":
-		bE2B = "on"
-	else:
-		bE2B = "off"
-
-	if GetExport2Bin() == "":
-		bE2B = "off"
-		if cmds.confirmDialog(message="You need to set Export2Bin path first!\nDo you want to set the path to Export2Bin?", button=['Yes','No'], title="Error") == "yes":
-			if not SetExport2Bin() == "":
-				bE2B = "on"
-
-	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-	reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, bE2B)
-	reg.CloseKey(storageKey)
-	CreateMenu()
  	
 def ForceExport2Bin(yesno):
 	try:
@@ -3360,16 +3307,32 @@ def getObjectByAlias(aname):
 		return ""
 	return cmds.getAttr("CoDMayaTools.objAlias%s" % aname) or ""
 
+def SetToggableOption(name=""):
+	try:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
+	except WindowsError:
+		storageKey = reg.CreateKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
+
+	reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_DWORD , int(cmds.menuItem(name, query=True, checkBox=True )) )
+
+def QueryToggableOption(name=""):
+	try:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
+		reg.QueryValueEx(storageKey, "Use%s" % name)[0]
+	except WindowsError:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
+		try:
+			reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_DWORD , 0 )
+		except:
+			return
+
+	return reg.QueryValueEx(storageKey, "Use%s" % name)[0]
+
+
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------ Init ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
-def AddToggleableOption(name, label):
-    if UseOption(name):
-        cmds.menuItem(label="%s: on" % label, command="CoDMayaTools.ToggleOption('%s')" % name)
-    else:
-        cmds.menuItem(label="%s: off" % label, command="CoDMayaTools.ToggleOption('%s')" % name)
-
-
 def CreateMenu():
 	cmds.setParent(mel.eval("$temp1=$gMainWindow"))
 	
@@ -3388,7 +3351,7 @@ def CreateMenu():
 	cmds.menuItem(label="Create New Gunsleeve Maya File", command=CreateNewGunsleeveMayaFile)
 	cmds.menuItem(label="Create New ViewModel Rig File", command=CreateNewViewmodelRigFile)
 	cmds.menuItem(label="Switch Gun in Current Rig File", command=SwitchGunInCurrentRigFile)
-	AddToggleableOption("AutoRename","Automatically rename joints")
+#	AddToggleableOption("AutoRename","Automatically rename joints")
 	cmds.setParent(menu, menu=True)
 	
 	# Import tools
@@ -3436,15 +3399,19 @@ def CreateMenu():
 #	cmds.menuItem(label="CoD5", command="CoDMayaTools.SetGame('CoD5')")
 #	cmds.menuItem(label="CoD4", command="CoDMayaTools.SetGame('CoD4')")
 #	cmds.setParent(menu, menu=True)
-	if UseExport2Bin():
-		cmds.menuItem(label="Export2Bin: on", command="CoDMayaTools.ToggleE2B()")
-	else:
-		cmds.menuItem(label="Export2Bin: off", command="CoDMayaTools.ToggleE2B()")
+
+	cmds.menuItem(label="Settings", subMenu=True)
+	cmds.menuItem(label="Set Root Folder",  command="CoDMayaTools.SetRootFolder(None, 'CoD5')")
+	cmds.menuItem(divider=True)
+	cmds.menuItem("E2B", label='Use Export2Bin', checkBox=QueryToggableOption('E2B'), command="CoDMayaTools.SetToggableOption('E2B')" )
 	cmds.menuItem(label="Set Path to Export2Bin", command="CoDMayaTools.SetExport2Bin()")
 	cmds.menuItem(divider=True)
-	AddToggleableOption("Legacy", "CoD1 Mode")
-	AddToggleableOption("BO3Mode", "BO3 Mode")
+	cmds.menuItem("AutomaticRename", label='Automatically rename joints (J_GUN, etc.)', checkBox=QueryToggableOption('AutomaticRename'), command="CoDMayaTools.SetToggableOption('AutomaticRename')" )
+	cmds.menuItem(divider=True)
+	cmds.menuItem("BO3Mode", label='BO3 Mode', checkBox=QueryToggableOption('BO3Mode'), command="CoDMayaTools.SetToggableOption('BO3Mode')" )
+	cmds.menuItem("CoD1Mode", label='CoD1 Mode', checkBox=QueryToggableOption('CoD1Mode'), command="CoDMayaTools.SetToggableOption('CoD1Mode')" )
 	cmds.menuItem(label="What are those Legacy options?", command="CoDMayaTools.LegacyWindow()")
+	cmds.setParent(menu, menu=True)
 	cmds.menuItem(divider=True)
 	# For easy script updating
 	cmds.menuItem(label="Reload Script", command="reload(CoDMayaTools)")
@@ -3478,7 +3445,6 @@ except WindowsError:
 	SetRootFolder()
 	res = cmds.confirmDialog(message="Are you using Export2Bin? (only required for Black Ops 3)", button=['Yes', 'No'], defaultButton='No', title="First time configuration")
 	if res == "Yes":
-		SetExport2Bin()
 		ForceExport2Bin("on")
 	else:
 		ForceExport2Bin("off")
