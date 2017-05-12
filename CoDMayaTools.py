@@ -3307,14 +3307,17 @@ def getObjectByAlias(aname):
 		return ""
 	return cmds.getAttr("CoDMayaTools.objAlias%s" % aname) or ""
 
-def SetToggableOption(name=""):
+def SetToggableOption(name="", val=0):
+	if not val:
+		val = int(cmds.menuItem(name, query=True, checkBox=True ))
+
 	try:
 		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
 	except WindowsError:
 		storageKey = reg.CreateKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
 		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
 
-	reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_DWORD , int(cmds.menuItem(name, query=True, checkBox=True )) )
+	reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_DWORD, val )
 
 def QueryToggableOption(name=""):
 	try:
@@ -3432,10 +3435,6 @@ try:
 except WindowsError:
 	storageKey = reg.CreateKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1]) # Seems to fail because above in the bin function it tries to open the key but doesn't exist and stops there, so I heck it and added this.
 
-CreateMenu()
-CreateXAnimWindow()
-CreateXModelWindow()
-CreateXCamWindow()
 try:
 	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
 	codRootPath = reg.QueryValueEx(storageKey, "RootPath")[0]
@@ -3445,9 +3444,14 @@ except WindowsError:
 	SetRootFolder()
 	res = cmds.confirmDialog(message="Are you using Export2Bin? (only required for Black Ops 3)", button=['Yes', 'No'], defaultButton='No', title="First time configuration")
 	if res == "Yes":
-		ForceExport2Bin("on")
+		SetToggableOption(name="E2B", val=1)
 	else:
-		ForceExport2Bin("off")
+		SetToggableOption(name="E2B", val=0)
 	cmds.confirmDialog(message="You're set! You can now export models and anims to any CoD!")
+
+CreateMenu()
+CreateXAnimWindow()
+CreateXModelWindow()
+CreateXCamWindow()
 
 print "CoDMayaTools initialized."
