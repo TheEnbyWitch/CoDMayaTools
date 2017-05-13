@@ -2023,6 +2023,7 @@ def XAnimWindow_SetFrames(required_parameter):
     end = cmds.playbackOptions(maxTime=True, query=True)  # Query start and end froms.
     cmds.intField(OBJECT_NAMES['xanim'][0] + "_FrameStartField", edit=True, value=start)
     cmds.intField(OBJECT_NAMES['xanim'][0] + "_FrameEndField", edit=True, value=end)
+    XAnimWindow_UpdateFrameRange(1)
 
 def XAnimWindow_UpdateFrameRange(required_parameter):
 	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
@@ -2370,6 +2371,7 @@ def XCamWindow_SetFrames(required_parameter):
     end = cmds.playbackOptions(maxTime=True, query=True)  # Query start and end froms.
     cmds.intField(OBJECT_NAMES['xcam'][0] + "_FrameStartField", edit=True, value=start)
     cmds.intField(OBJECT_NAMES['xcam'][0] + "_FrameEndField", edit=True, value=end)
+    XCamWindow_UpdateFrameRange(1)
 
 def XCamWindow_UpdateFrameRange(required_parameter):
 	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
