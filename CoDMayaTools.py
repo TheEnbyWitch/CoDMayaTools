@@ -3208,20 +3208,20 @@ def SetToggableOption(name="", val=0):
 		storageKey = reg.CreateKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
 		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
 
-	reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_DWORD, val )
+	reg.SetValueEx(storageKey, "Setting_%s" % name, 0, reg.REG_DWORD, val )
 
 def QueryToggableOption(name=""):
 	try:
 		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
-		reg.QueryValueEx(storageKey, "Use%s" % name)[0]
+		reg.QueryValueEx(storageKey, "Setting_%s" % name)[0]
 	except WindowsError:
 		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
 		try:
-			reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_DWORD , 0 )
+			reg.SetValueEx(storageKey, "Setting_%s" % name, 0, reg.REG_DWORD , 0 )
 		except:
 			return
 
-	return reg.QueryValueEx(storageKey, "Use%s" % name)[0]
+	return reg.QueryValueEx(storageKey, "Setting_%s" % name)[0]
 
 
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
