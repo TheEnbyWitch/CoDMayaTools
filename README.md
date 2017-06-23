@@ -1,5 +1,3 @@
-## THIS IS THE DEVELOPMENT BRANCH WHERE WE ADD SP00ki THINGS, EXPECT ISSUES.
-
 ## New features in comparison to Aidan's original version:
 * Full support for BO3 and Export2Bin
 * Backwards compatibility with CoD1 (untested & xmodels only)
@@ -44,4 +42,5 @@ All cosmetic bones share the same parent, and thus it was easier to mark 1 joint
 
 #### The model MUST be converted using DTZxPorter's ExportX, NOT Export2Bin, to download ExportX click here and go to the Utilities tab
 
+Disable Bo3 Mode if using Cosmetic Bones.
 [exportx](http://aviacreations.com/wraith/)
