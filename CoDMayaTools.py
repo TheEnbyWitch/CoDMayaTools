@@ -55,6 +55,9 @@
 #	* (Hopyfully) Fixed Export2Bin and should now work and convert in same dir.
 # VERSION 2.4
 #   * Added basic XCAM_EXPORT support
+#	* Added support for CoD1 (untested)
+#	* Added support for BO3 xmodel_export keywords
+#	* Added an option to automatically rename tag_weapon and j_gun joints
 #
 
 # TODO: Speed up joint weight loading
@@ -719,6 +722,9 @@ def IWIToDDSUser():
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def GetJointList():
 	joints = []
+	cosmeticBone = cmds.getAttr(OBJECT_NAMES["xmodel"][2]+ ".Cosmeticbone")
+	cosmetic_list = []
+	cosmetic_id = 0
 	
 	# Get selected objects
 	selectedObjects = OpenMaya.MSelectionList()
@@ -743,7 +749,20 @@ def GetJointList():
 			index = len(joints)
 			
 			if node[2]:
-				joints.append((node[0], node[1]))
+				# No root bone.
+				if node[0] > -1:
+					if joints[node[0]][1].partialPathName() == cosmeticBone:
+						cosmetic_list.append((node[0], node[1]))
+					else:
+						joints.append((node[0], node[1]))
+				else:
+					joints.append((node[0], node[1]))
+
+
+				if node[1].partialPathName() == cosmeticBone:
+					cosmetic_id = index
+
+
 			else:
 				index = node[0]
 			
@@ -754,8 +773,11 @@ def GetJointList():
 				searchQueue.put((index, childNode, selectedObjects.hasItem(dagPath) and dagPath.hasFn(OpenMaya.MFn.kJoint)))
 		
 		ProgressBarStep()
+
+	for joint in cosmetic_list:
+		joints.append(joint)
 	
-	return joints
+	return joints, cosmetic_list, cosmetic_id
 
 def GetCameraList():
 	cameras = []
@@ -924,7 +946,7 @@ def ExportXModel(filePath):
 	joints = GetJointList()
 #	if len(joints) > 128:
 #		return "Error: More than 128 joints"
-	shapes = GetShapes(joints)
+	shapes = GetShapes(joints[0])
 	if type(shapes) == str:
 		return shapes
 	
@@ -950,7 +972,12 @@ def ExportXModel(filePath):
 		f.write("// Source filename: Unsaved\n")
 	f.write("// Export time: %s\n\n" % datetime.datetime.now().strftime("%a %b %d %Y, %H:%M:%S")) 
 	f.write("MODEL\n")
-	f.write("VERSION 6\n\n")
+	if QueryToggableOption("BO3Mode"):
+		f.write("VERSION 7\n\n")
+	elif QueryToggableOption("CoD1Mode"):
+		f.write("VERSION 5\n\n")
+	else:
+		f.write("VERSION 6\n\n")
 	
 	# Write joints
 	if len(joints) == 0:
@@ -965,22 +992,38 @@ def ExportXModel(filePath):
 		f.write("Y 0.000000 1.000000 0.000000\n")
 		f.write("Z 0.000000 0.000000 1.000000\n")
 	else:
-		f.write("NUMBONES %i\n" % len(joints))
-		for i, joint in enumerate(joints):
+		f.write("NUMBONES %i\n" % len(joints[0]))
+		if joints[1] > 0:
+			# NUMCOSMETICS COUNT PARENTID
+			f.write("NUMCOSMETICS %i %i\n" % (len(joints[1]), joints[2]) )
+		for i, joint in enumerate(joints[0]):
 			name = joint[1].partialPathName().split("|")
- 			name = name[len(name)-1].split(":") # Remove namespace prefixes
-			name = name[len(name)-1]
+			name = name[len(name) - 1].split(":") # Remove namespace prefixes
+			name = name[len(name) - 1]
+			if name == "tag_weapon" and QueryToggableOption("AutomaticRename"):
+				name = "tag_weapon_right"
+			elif name == "j_gun" and QueryToggableOption("AutomaticRename"):
+				name = "tag_weapon"
 			f.write("BONE %i %i \"%s\"\n" % (i, joint[0], name))
 		
-		for i, joint in enumerate(joints):
+		for i, joint in enumerate(joints[0]):
 			f.write("\nBONE %i\n" % i)
 			WriteJointData(f, joint[1])
-	
+
 	# Write verts
-	f.write("\nNUMVERTS %i\n" % len(shapes["verts"]))
+	if QueryToggableOption("BO3Mode"):
+		f.write("\nNUMVERTS32 %i\n" % len(shapes["verts"]))
+	else:
+		f.write("\nNUMVERTS %i\n" % len(shapes["verts"]))
 	for i, vert in enumerate(shapes["verts"]):
-		f.write("VERT %i\n" % i)
-		f.write("OFFSET %f, %f, %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
+		if QueryToggableOption("BO3Mode"):
+			f.write("VERT32 %i\n" % i)
+		else:
+			f.write("VERT %i\n" % i)
+		if QueryToggableOption("CoD1Mode") and not QueryToggableOption("BO3Mode"):
+			f.write("OFFSET %f %f %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
+		else:
+			f.write("OFFSET %f, %f, %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
 		f.write("BONES %i\n" % max(len(vert[1]), 1))
 		if len(vert[1]) > 0:
 			for bone in vert[1]:
@@ -992,9 +1035,15 @@ def ExportXModel(filePath):
 	# Write faces
 	f.write("NUMFACES %i\n" % len(shapes["faces"]))
 	for j, face in enumerate(shapes["faces"]):
-		f.write("TRI %i %i 0 0\n" % (face[0], face[1]))
+		if QueryToggableOption("BO3Mode"):
+			f.write("TRI16 %i %i 0 0\n" % (face[0], face[1]))
+		else:
+			f.write("TRI %i %i 0 0\n" % (face[0], face[1]))
 		for i in range(0, 3):
-			f.write("VERT %i\n" % face[2][i])
+			if QueryToggableOption("BO3Mode"):
+				f.write("VERT32 %i\n" % face[2][i])
+			else:
+				f.write("VERT %i\n" % face[2][i])
 			f.write("NORMAL %f %f %f\n" % (face[5][i].x, face[5][i].y, face[5][i].z))
 			f.write("COLOR %f %f %f %f\n" % (face[4][i].r, face[4][i].g, face[4][i].b, face[4][i].a))
 			f.write("UV 1 %f %f\n" % (face[3][i][0], face[3][i][1]))
@@ -1007,27 +1056,31 @@ def ExportXModel(filePath):
 	
 	# Write materials
 	f.write("\nNUMMATERIALS %i\n" % len(shapes["materials"]))
-	for i, material in enumerate(shapes["materials"]):
-		f.write("MATERIAL %i \"%s\" \"%s\" \"%s\"\n" % (i, material[0].split(":")[-1], "Lambert", material[1]))
+	if QueryToggableOption("CoD1Mode") and not QueryToggableOption("BO3Mode"):
+		for i, material in enumerate(shapes["materials"]):
+			f.write("MATERIAL %i \"%s\"\n" % (i, material[0].split(":")[-1]))
+	else:
+		for i, material in enumerate(shapes["materials"]):
+			f.write("MATERIAL %i \"%s\" \"%s\" \"%s\"\n" % (i, material[0].split(":")[-1], "Lambert", material[1]))
 		
-		# According to the Modrepository page on the XModel format, the following values don't matter
-		f.write("COLOR 0.000000 0.000000 0.000000 1.000000\n"
-				"TRANSPARENCY 0.000000 0.000000 0.000000 1.000000\n"
-				"AMBIENTCOLOR 0.000000 0.000000 0.000000 1.000000\n"
-				"INCANDESCENCE 0.000000 0.000000 0.000000 1.000000\n"
-				"COEFFS 0.800000 0.000000\n"
-				"GLOW 0.000000 0\n"
-				"REFRACTIVE 6 1.000000\n"
-				"SPECULARCOLOR -1.000000 -1.000000 -1.000000 1.000000\n"
-				"REFLECTIVECOLOR -1.000000 -1.000000 -1.000000 1.000000\n"
-				"REFLECTIVE -1 -1.000000\n"
-				"BLINN -1.000000 -1.000000\n"
-				"PHONG -1.000000\n\n")
+			# According to the Modrepository page on the XModel format, the following values don't matter
+			f.write("COLOR 0.000000 0.000000 0.000000 1.000000\n"
+					"TRANSPARENCY 0.000000 0.000000 0.000000 1.000000\n"
+					"AMBIENTCOLOR 0.000000 0.000000 0.000000 1.000000\n"
+					"INCANDESCENCE 0.000000 0.000000 0.000000 1.000000\n"
+					"COEFFS 0.800000 0.000000\n"
+					"GLOW 0.000000 0\n"
+					"REFRACTIVE 6 1.000000\n"
+					"SPECULARCOLOR -1.000000 -1.000000 -1.000000 1.000000\n"
+					"REFLECTIVECOLOR -1.000000 -1.000000 -1.000000 1.000000\n"
+					"REFLECTIVE -1 -1.000000\n"
+					"BLINN -1.000000 -1.000000\n"
+					"PHONG -1.000000\n\n")
 		
 	f.close()
 	ProgressBarStep()
 	cmds.refresh()
-	if UseExport2Bin():
+	if QueryToggableOption('E2B'):
 		RunExport2Bin(filePath)
 
 def GetMaterialsFromMesh(mesh, dagPath):
@@ -1366,6 +1419,10 @@ def ExportXAnim(filePath):
 		name = joint[1].partialPathName().split("|")
 		name = name[len(name)-1].split(":") # Remove namespace prefixes
 		name = name[len(name)-1]
+		if name == "tag_weapon" and QueryToggableOption("AutomaticRename"):
+			name = "tag_weapon_right"
+		elif name == "j_gun" and QueryToggableOption("AutomaticRename"):
+			name = "tag_weapon"
 		f.write("PART %i \"%s\"\n" % (i, name))
 	
 	fLength = ((frameEnd-frameStart+1) / multiplier)
@@ -1424,7 +1481,7 @@ def ExportXAnim(filePath):
 	ProgressBarStep()
 	cmds.refresh()
 
-	if UseExport2Bin():
+	if QueryToggableOption('E2B'):
 		RunExport2Bin(filePath)
 	
 def WriteDummyTargetModelBoneRoot(f, numframes):
@@ -1820,6 +1877,7 @@ def CreateXModelWindow():
 	
 	exportMultipleSlotsButton = cmds.button(label="Export Multiple Slots", command="CoDMayaTools.GeneralWindow_ExportMultiple('xmodel')", annotation="Automatically export multiple slots at once, using each slot's saved selection")
 	exportInMultiExportCheckbox = cmds.checkBox(OBJECT_NAMES['xmodel'][0]+"_UseInMultiExportCheckBox", label="Use current slot for Export Multiple", changeCommand="CoDMayaTools.GeneralWindow_ExportInMultiExport('xmodel')", annotation="Check this make the 'Export Multiple Slots' button export this slot")
+	setCosmeticParentbone = cmds.button(OBJECT_NAMES['xmodel'][0]+"_MarkCosmeticParent", label="Set selected as Cosmetic Parent", command="CoDMayaTools.SetCosmeticParent('xmodel')", annotation="Set this bone as our cosmetic parent. All bones under this will be cosmetic.")
 
 	# Setup form
 	cmds.formLayout(form, edit=True,
@@ -1831,7 +1889,8 @@ def CreateXModelWindow():
 					(exportMultipleSlotsButton, 'bottom', 6), (exportMultipleSlotsButton, 'left', 10),
 					(exportInMultiExportCheckbox, 'bottom', 9), (exportInMultiExportCheckbox, 'right', 6),
 					(exportSelectedButton, 'left', 10),
-					(saveSelectionButton, 'right', 10)],
+					(saveSelectionButton, 'right', 10),
+					(setCosmeticParentbone, 'left', 10)],
 					#(exportSelectedButton, 'bottom', 6), (exportSelectedButton, 'left', 10),
 					#(saveSelectionButton, 'bottom', 6), (saveSelectionButton, 'right', 10),
 					#(getSavedSelectionButton, 'bottom', 6)],
@@ -1842,7 +1901,11 @@ def CreateXModelWindow():
 						(fileBrowserButton, 'bottom', 5, exportSelectedButton),
 						(exportSelectedButton, 'bottom', 5, separator2),
 						(saveSelectionButton, 'bottom', 5, separator2),
+						(setCosmeticParentbone, 'bottom', 5, separator2),
+						(saveSelectionButton, 'bottom', 5, setCosmeticParentbone),
+						(exportSelectedButton, 'bottom', 5, setCosmeticParentbone),
 						(getSavedSelectionButton, 'bottom', 5, separator2), (getSavedSelectionButton, 'right', 10, saveSelectionButton),
+						(getSavedSelectionButton, 'bottom', 5, setCosmeticParentbone),
 						(separator2, 'bottom', 5, exportMultipleSlotsButton)])
 
 def RefreshXModelWindow():
@@ -1863,7 +1926,9 @@ def RefreshXModelWindow():
 	if not cmds.attributeQuery("useinmultiexport", node=OBJECT_NAMES['xmodel'][2], exists=True):
 		cmds.addAttr(OBJECT_NAMES['xmodel'][2], longName="useinmultiexport", multi=True, attributeType='bool', defaultValue=False)
 		cmds.setAttr(OBJECT_NAMES['xmodel'][2]+".useinmultiexport", size=EXPORT_WINDOW_NUMSLOTS)
-		
+	if not cmds.attributeQuery("Cosmeticbone", node=OBJECT_NAMES['xmodel'][2], exists=True):
+		cmds.addAttr(OBJECT_NAMES['xmodel'][2], longName="Cosmeticbone", dataType="string")	
+
 	cmds.lockNode(OBJECT_NAMES['xmodel'][2], lock=True)
 	
 	# Set values
@@ -1875,6 +1940,20 @@ def RefreshXModelWindow():
 	useInMultiExport = cmds.getAttr(OBJECT_NAMES['xmodel'][2]+(".useinmultiexport[%i]" % slotIndex))
 	cmds.checkBox(OBJECT_NAMES['xmodel'][0]+"_UseInMultiExportCheckBox", edit=True, value=useInMultiExport)
 	
+
+def SetCosmeticParent(reqarg):
+	selection = cmds.ls(selection = True, type = "joint")  
+
+	if(len(selection) > 1):
+		MessageBox("Only 1 Cosmetic Parent is allowed.")
+		return
+	elif(len(selection) == 0):
+		MessageBox("No joint selected.")
+		return		
+
+	cmds.setAttr(OBJECT_NAMES['xmodel'][2] + ".Cosmeticbone", selection[0], type="string")
+
+	MessageBox("\"%s\" has now been set as the cosmetic parent." % str(selection[0]))
 	
 	
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1901,6 +1980,7 @@ def CreateXAnimWindow():
 	framesStartField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameStartField", height=21, width=35, minValue=0, changeCommand=XAnimWindow_UpdateFrameRange, annotation="Starting frame to export (inclusive)")
 	framesToLabel = cmds.text(label="to")
 	framesEndField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameEndField", height=21, width=35, minValue=0, changeCommand=XAnimWindow_UpdateFrameRange, annotation="Ending frame to export (inclusive)")
+	GrabFrames = cmds.button(label="Grab Frames", width=75, command=XAnimWindow_SetFrames, annotation="Get frame end and start from scene.")
 	fpsLabel = cmds.text(label="FPS:")
 	fpsField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FPSField", height=21, width=35, value=1, minValue=1, changeCommand=XAnimWindow_UpdateFramerate, annotation="Animation FPS")
 	qualityLabel = cmds.text(label="Quality (0-10)", annotation="Quality of the animation, higher values result in less jitter but produce larger files. Default is 0")
@@ -1925,7 +2005,7 @@ def CreateXAnimWindow():
 	
 	exportMultipleSlotsButton = cmds.button(label="Export Multiple Slots", command="CoDMayaTools.GeneralWindow_ExportMultiple('xanim')", annotation="Automatically export multiple slots at once, using each slot's saved selection")
 	exportInMultiExportCheckbox = cmds.checkBox(OBJECT_NAMES['xanim'][0]+"_UseInMultiExportCheckBox", label="Use current slot for Export Multiple", changeCommand="CoDMayaTools.GeneralWindow_ExportInMultiExport('xanim')", annotation="Check this make the 'Export Multiple Slots' button export this slot")
-	IgnoreUslessNotes = cmds.checkBox("Scoba_IgnoreUslessNotes", label="Ignore Useless Notes like reload_large, etc.", annotation="Check this if you want to ignre notes like reload_large, etc.", value=True)
+	IgnoreUslessNotes = cmds.checkBox("CoDMAYA_IgnoreUslessNotes", label="Ignore Useless Notes like reload_large, etc.", annotation="Check this if you want to ignre notes like reload_large, etc.", value=True)
 	ReverseAnimation = cmds.checkBox("CoDMAYA_ReverseAnim", label="Export Animation Reversed", annotation="Check this if you want to export the anim. backwards. Usefule for reversing to make opposite sprints, etc.", value=False)
 	# Setup form
 	cmds.formLayout(form, edit=True,
@@ -1957,6 +2037,7 @@ def CreateXAnimWindow():
 						(framesStartField, 'top', 5, separator1), (framesStartField, 'left', 4, framesLabel),
 						(framesToLabel, 'top', 8, separator1), (framesToLabel, 'left', 4+35+4, framesLabel),
 						(framesEndField, 'top', 5, separator1), (framesEndField, 'left', 4, framesToLabel),
+						(GrabFrames, 'top', 5, separator1), (GrabFrames, 'left', 4, framesEndField),
 						(fpsLabel, 'top', 8, framesStartField),
 						(fpsField, 'top', 5, framesStartField), (fpsField, 'left', 21, fpsLabel),
 						(qualityLabel, 'top', 8, fpsField),
@@ -1980,6 +2061,13 @@ def CreateXAnimWindow():
 						(getSavedSelectionButton, 'bottom', 5, separator3), (getSavedSelectionButton, 'right', 10, saveSelectionButton),
 						(separator3, 'bottom', 5, exportMultipleSlotsButton)
 						])
+
+def XAnimWindow_SetFrames(required_parameter):
+    start = cmds.playbackOptions(minTime=True, query=True)
+    end = cmds.playbackOptions(maxTime=True, query=True)  # Query start and end froms.
+    cmds.intField(OBJECT_NAMES['xanim'][0] + "_FrameStartField", edit=True, value=start)
+    cmds.intField(OBJECT_NAMES['xanim'][0] + "_FrameEndField", edit=True, value=end)
+    XAnimWindow_UpdateFrameRange(1)
 
 def XAnimWindow_UpdateFrameRange(required_parameter):
 	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
@@ -2025,102 +2113,38 @@ def ReadXanimNotes(required_parameter):
 	existingItems = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", query=True, allItems=True)
 	noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
 
-	isWraithAnim = False
-	isSEAnim = False
+	notetracks = ["WraithNotes", "SENotes", "NoteTrack"]
 
-	isNotWraithAnimButHasNoteTrack = False
-	
-	if cmds.objExists('WraithNotes'):
-		isWraithAnim = True
-		
-	if cmds.objExists('SENotes'):
-		isSEAnim = True
+	for notetrack in notetracks:
+		if cmds.objExists(notetrack):
+			cmds.select( clear=True )
+			cmds.select( notetrack, hi=True )
 
-	if cmds.objExists('NoteTrack'):
-		isNotWraithAnimButHasNoteTrack = True
+			notes = cmds.ls( selection=True, type="transform" ) # Grab what is selected.
 
-	if cmds.objExists('WraithNotes') and cmds.objExists('NoteTrack'):
-		cmds.confirmDialog( title='ERROR', message='WraithNotes and NoteTrack both exist in this scene, please delete one and try again.' , button=['Ok'], defaultButton='Ok')
-		return
-
-
-	if isSEAnim:
-		cmds.select( clear=True )
-		cmds.select( 'SENotes', hi=True )
-		cmds.select( 'SENotes', d=True ) 
-
-		notes = cmds.ls( selection=True ) # Grab what is selected.
-
-		for NoteTrack in notes: # Go through each one.
-			if not "Shape" in NoteTrack: # Avoid ones with Shape at end.
-				for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
-					IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
-										NoteTrack == "reload_large" 
-									 or NoteTrack == "reload_small" 
-									 or NoteTrack == "reload_medium"
-									 or NoteTrack == "clip_out"
-									 or NoteTrack == "clip_in"
-									 or NoteTrack == "rechamber_release"
-									 or NoteTrack == "rechamber_pull_back"
-									 or NoteTrack == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
-
-									)
-					if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
-						continue
-					noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
-					cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-					cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
-	
-	elif isWraithAnim:
-		cmds.select( clear=True )
-		cmds.select( 'WraithNotes', hi=True )
-		cmds.select( 'WraithNotes', d=True ) # Select WraithNotes and it's children and then deselect it to avoid issues.
-
-		notes = cmds.ls( selection=True ) # Grab what is selected.
-
-		for NoteTrack in notes: # Go through each one.
-			if not "Shape" in NoteTrack: # Avoid ones with Shape at end.
-				for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
-					IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
-										NoteTrack == "reload_large" 
-									 or NoteTrack == "reload_small" 
-									 or NoteTrack == "reload_medium"
-									 or NoteTrack == "clip_out"
-									 or NoteTrack == "clip_in"
-									 or NoteTrack == "rechamber_release"
-									 or NoteTrack == "rechamber_pull_back"
-									 or NoteTrack == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
-
-									)
-					if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
-						continue
-					noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
-					cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-					cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
-	elif isNotWraithAnimButHasNoteTrack:
-		for note in cmds.keyframe("NoteTrack", attribute="MainNote", sl=False, q=True, tc=True): # cmds.keyframe("NoteTrack", attribute="MainNote", sl=False, q=True, tc=True) lists all the keyframes for this object's attribute, so we loop through it.
-			noteName =  cmds.getAttr('NoteTrack.MainNote',x=True, asString=True, t=note) # Here is where we grab the Note from the attribute "MainNote", asString allows us to return it as string instead of intiger.
-			IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
-								noteName == "reload_large" 
-							 or noteName == "reload_small" 
-							 or noteName == "reload_medium"
-							 or noteName == "clip_out"
-							 or noteName == "clip_in"
-							 or noteName == "rechamber_release"
-							 or noteName == "rechamber_pull_back"
-							 or noteName == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
-							)
-			if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
-				continue
-			if "sndnt#" in noteName:
-				noteName = noteName[6:] # This essentially, in laymans terms, strips the notetrack's name of the first 6 characters if it contains "sndnt#" in the name.
-			if "rmbnt#" in noteName:
-				noteName = noteName[6:]
-			noteList += "%s:%i," % (noteName, note) # Add Notes to Aidan's list.
-			cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-			cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=noteName, selectIndexedItem=len((existingItems or []))+1)
-	else:
-		cmds.confirmDialog( title='ERROR', message='Can\'t find Notetracks for Wriath Anim or Normal anim.' , button=['Ok'], defaultButton='Ok') 
+			for NoteTrack in notes: # Go through each one.
+				try:
+					for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
+						IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
+											NoteTrack == "reload_large" 
+										 or NoteTrack == "reload_small" 
+										 or NoteTrack == "reload_medium"
+										 or NoteTrack == "clip_out"
+										 or NoteTrack == "clip_in"
+										 or NoteTrack == "rechamber_release"
+										 or NoteTrack == "rechamber_pull_back"
+										)
+						if cmds.checkBox("CoDMAYA_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
+							continue
+						if NoteTrack == "end":
+							continue
+						noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
+						cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+						cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
+				except Exception as e:
+					if NoteTrack != notetrack:
+						print("Error has occured while reading note: %s, the error was: '%s', Skipping." % (NoteTrack, e))
+					pass
 
 	XAnimWindow_SelectNote()
 
@@ -2305,8 +2329,8 @@ def CreateXCamWindow():
 	framesEndField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FrameEndField", height=21, width=35, minValue=0, changeCommand=XCamWindow_UpdateFrameRange, annotation="Ending frame to export (inclusive)")
 	fpsLabel = cmds.text(label="FPS:")
 	fpsField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FPSField", height=21, width=35, value=1, minValue=1, changeCommand=XCamWindow_UpdateFramerate, annotation="Animation FPS")
-	qualityLabel = cmds.text(label="Quality (0-10)", annotation="Quality of the animation, higher values result in less jitter but produce larger files. Default is 0")
-	qualityField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_qualityField", height=21, width=35, value=0, minValue=0, maxValue=10, step=1, changeCommand=XCamWindow_UpdateMultiplier, annotation="Quality of the animation, higher values result in less jitter but produce larger files.")
+	#qualityLabel = cmds.text(label="Quality (0-10)", annotation="Quality of the animation, higher values result in less jitter but produce larger files. Default is 0")
+	#qualityField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_qualityField", height=21, width=35, value=0, minValue=0, maxValue=10, step=1, changeCommand=XCamWindow_UpdateMultiplier, annotation="Quality of the animation, higher values result in less jitter but produce larger files.")
 	
 	notetracksLabel = cmds.text(label="Notetrack:", annotation="Notetrack info for the animation")
 	noteList = cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", allowMultiSelection=False, selectCommand=XCamWindow_SelectNote, annotation="List of notes in the notetrack")
@@ -2316,6 +2340,7 @@ def CreateXCamWindow():
 	removeNoteButton = cmds.button(label="Remove Note", command=XCamWindow_RemoveNote, annotation="Remove the currently selected note from the notetrack")
 	noteFrameLabel = cmds.text(label="Frame:", annotation="The frame the currently selected note is applied to")
 	noteFrameField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_NoteFrameField", changeCommand=XCamWindow_UpdateNoteFrame, height=21, width=30, minValue=0, annotation="The frame the currently selected note is applied to")
+	GrabFrames = cmds.button(label="Grab Frames", width=75, command=XCamWindow_SetFrames, annotation="Get frame end and start from scene.")
 	
 	saveToLabel = cmds.text(label="Save to:", annotation="This is where .xcam_export is saved to")
 	saveToField = cmds.textField(OBJECT_NAMES['xcam'][0]+"_SaveToField", height=21, changeCommand="CoDMayaTools.GeneralWindow_SaveToField('xcam')", annotation="This is where .xcam_export is saved to")
@@ -2327,19 +2352,19 @@ def CreateXCamWindow():
 	
 	exportMultipleSlotsButton = cmds.button(label="Export Multiple Slots", command="CoDMayaTools.GeneralWindow_ExportMultiple('xcam')", annotation="Automatically export multiple slots at once, using each slot's saved selection")
 	exportInMultiExportCheckbox = cmds.checkBox(OBJECT_NAMES['xcam'][0]+"_UseInMultiExportCheckBox", label="Use current slot for Export Multiple", changeCommand="CoDMayaTools.GeneralWindow_ExportInMultiExport('xcam')", annotation="Check this make the 'Export Multiple Slots' button export this slot")
-	IgnoreUslessNotes = cmds.checkBox("Scoba_IgnoreUslessNotes", label="Ignore Useless Notes like reload_large, etc.", annotation="Check this if you want to ignre notes like reload_large, etc.", value=True)
-	ReverseAnimation = cmds.checkBox("CoDMAYA_ReverseAnim", label="Export Animation Reversed", annotation="Check this if you want to export the anim. backwards. Usefule for reversing to make opposite sprints, etc.", value=False)
+	IgnoreUslessNotes = cmds.checkBox("CoDMAYA_IgnoreUslessNotes", label="Ignore Useless Notes like reload_large, etc.", annotation="Check this if you want to ignre notes like reload_large, etc.", value=True)
+	#ReverseAnimation = cmds.checkBox("CoDMAYA_ReverseAnim", label="Export Animation Reversed", annotation="Check this if you want to export the anim. backwards. Usefule for reversing to make opposite sprints, etc.", value=False)
 	# Setup form
 	cmds.formLayout(form, edit=True,
 		attachForm=[(slotDropDown, 'top', 6), (slotDropDown, 'left', 10), (slotDropDown, 'right', 10),
 					(separator1, 'left', 0), (separator1, 'right', 0),
 					(framesLabel, 'left', 10),
 					(fpsLabel, 'left', 10),
-					(qualityLabel, 'left', 10),
+					#(qualityLabel, 'left', 10),
 					(notetracksLabel, 'left', 10),
 					(noteList, 'left', 10),
 					(IgnoreUslessNotes, 'left', 10),
-					(ReverseAnimation, 'left', 10),
+					#(ReverseAnimation, 'left', 10),
 					(addNoteButton, 'right', 10),
 					(ReadNotesButton, 'right', 10),
 					(RenameNoteTrack, 'right', 10),
@@ -2359,14 +2384,15 @@ def CreateXCamWindow():
 						(framesStartField, 'top', 5, separator1), (framesStartField, 'left', 4, framesLabel),
 						(framesToLabel, 'top', 8, separator1), (framesToLabel, 'left', 4+35+4, framesLabel),
 						(framesEndField, 'top', 5, separator1), (framesEndField, 'left', 4, framesToLabel),
+						(GrabFrames, 'top', 5, separator1), (GrabFrames, 'left', 4, framesEndField),
 						(fpsLabel, 'top', 8, framesStartField),
 						(fpsField, 'top', 5, framesStartField), (fpsField, 'left', 21, fpsLabel),
-						(qualityLabel, 'top', 8, fpsField),
-						(qualityField, 'top', 5, fpsField), (qualityField, 'left', 21, qualityLabel),
-						(notetracksLabel, 'top', 5, qualityLabel),
-						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 60, separator2),
+						#(qualityLabel, 'top', 8, fpsField),
+						#(qualityField, 'top', 5, fpsField), (qualityField, 'left', 21, qualityLabel),
+						(notetracksLabel, 'top', 5, fpsLabel),
+						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 35, separator2),
 						(IgnoreUslessNotes, 'top', 10, noteList), (IgnoreUslessNotes, 'right', 10, removeNoteButton),
-						(ReverseAnimation, 'top', 10, IgnoreUslessNotes), (ReverseAnimation, 'right', 10, removeNoteButton),
+						#(ReverseAnimation, 'top', 10, IgnoreUslessNotes), (ReverseAnimation, 'right', 10, removeNoteButton),
 						(addNoteButton, 'top', 5, notetracksLabel),
 						(ReadNotesButton, 'top', 5, addNoteButton),
 						(RenameNoteTrack, 'top', 5, ReadNotesButton),
@@ -2382,6 +2408,14 @@ def CreateXCamWindow():
 						(getSavedSelectionButton, 'bottom', 5, separator3), (getSavedSelectionButton, 'right', 10, saveSelectionButton),
 						(separator3, 'bottom', 5, exportMultipleSlotsButton)
 						])
+
+
+def XCamWindow_SetFrames(required_parameter):
+    start = cmds.playbackOptions(minTime=True, query=True)
+    end = cmds.playbackOptions(maxTime=True, query=True)  # Query start and end froms.
+    cmds.intField(OBJECT_NAMES['xcam'][0] + "_FrameStartField", edit=True, value=start)
+    cmds.intField(OBJECT_NAMES['xcam'][0] + "_FrameEndField", edit=True, value=end)
+    XCamWindow_UpdateFrameRange(1)
 
 def XCamWindow_UpdateFrameRange(required_parameter):
 	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
@@ -2423,109 +2457,45 @@ def XCamWindow_AddNote(required_parameter):
 	XCamWindow_SelectNote()
 
 def ReadXcamNotes(required_parameter):
+
 	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
 	existingItems = cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", query=True, allItems=True)
 	noteList = cmds.getAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex)) or ""
 
-	isWraithAnim = False
-	isSEAnim = False
+	notetracks = ["WraithNotes", "SENotes", "NoteTrack"]
 
-	isNotWraithAnimButHasNoteTrack = False
-	
-	if cmds.objExists('WraithNotes'):
-		isWraithAnim = True
-		
-	if cmds.objExists('SENotes'):
-		isSEAnim = True
+	for notetrack in notetracks:
+		if cmds.objExists(notetrack):
+			cmds.select( clear=True )
+			cmds.select( notetrack, hi=True )
 
-	if cmds.objExists('NoteTrack'):
-		isNotWraithAnimButHasNoteTrack = True
+			notes = cmds.ls( selection=True, type="transform" ) # Grab what is selected.
 
-	if cmds.objExists('WraithNotes') and cmds.objExists('NoteTrack'):
-		cmds.confirmDialog( title='ERROR', message='WraithNotes and NoteTrack both exist in this scene, please delete one and try again.' , button=['Ok'], defaultButton='Ok')
-		return
+			for NoteTrack in notes: # Go through each one.
+				try:
+					for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
+						IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
+											NoteTrack == "reload_large" 
+										 or NoteTrack == "reload_small" 
+										 or NoteTrack == "reload_medium"
+										 or NoteTrack == "clip_out"
+										 or NoteTrack == "clip_in"
+										 or NoteTrack == "rechamber_release"
+										 or NoteTrack == "rechamber_pull_back"
+										)
+						if cmds.checkBox("CoDMAYA_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
+							continue
+						if NoteTrack == "end":
+							continue
+						noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
+						cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+						cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
+				except Exception as e:
+					if NoteTrack != notetrack:
+						print("Error has occured while reading note: %s, the error was: '%s', Skipping." % (NoteTrack, e))
+					pass
 
-
-	if isSEAnim:
-		cmds.select( clear=True )
-		cmds.select( 'SENotes', hi=True )
-		cmds.select( 'SENotes', d=True ) 
-
-		notes = cmds.ls( selection=True ) # Grab what is selected.
-
-		for NoteTrack in notes: # Go through each one.
-			if not "Shape" in NoteTrack: # Avoid ones with Shape at end.
-				for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
-					IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
-										NoteTrack == "reload_large" 
-									 or NoteTrack == "reload_small" 
-									 or NoteTrack == "reload_medium"
-									 or NoteTrack == "clip_out"
-									 or NoteTrack == "clip_in"
-									 or NoteTrack == "rechamber_release"
-									 or NoteTrack == "rechamber_pull_back"
-									 or NoteTrack == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
-
-									)
-					if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
-						continue
-					noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
-					cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-					cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
-	
-	elif isWraithAnim:
-		cmds.select( clear=True )
-		cmds.select( 'WraithNotes', hi=True )
-		cmds.select( 'WraithNotes', d=True ) # Select WraithNotes and it's children and then deselect it to avoid issues.
-
-		notes = cmds.ls( selection=True ) # Grab what is selected.
-
-		for NoteTrack in notes: # Go through each one.
-			if not "Shape" in NoteTrack: # Avoid ones with Shape at end.
-				for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
-					IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
-										NoteTrack == "reload_large" 
-									 or NoteTrack == "reload_small" 
-									 or NoteTrack == "reload_medium"
-									 or NoteTrack == "clip_out"
-									 or NoteTrack == "clip_in"
-									 or NoteTrack == "rechamber_release"
-									 or NoteTrack == "rechamber_pull_back"
-									 or NoteTrack == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
-
-									)
-					if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
-						continue
-					noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
-					cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-					cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
-	elif isNotWraithAnimButHasNoteTrack:
-		for note in cmds.keyframe("NoteTrack", attribute="MainNote", sl=False, q=True, tc=True): # cmds.keyframe("NoteTrack", attribute="MainNote", sl=False, q=True, tc=True) lists all the keyframes for this object's attribute, so we loop through it.
-			noteName =  cmds.getAttr('NoteTrack.MainNote',x=True, asString=True, t=note) # Here is where we grab the Note from the attribute "MainNote", asString allows us to return it as string instead of intiger.
-			IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
-								noteName == "reload_large" 
-							 or noteName == "reload_small" 
-							 or noteName == "reload_medium"
-							 or noteName == "clip_out"
-							 or noteName == "clip_in"
-							 or noteName == "rechamber_release"
-							 or noteName == "rechamber_pull_back"
-							 or noteName == "end" # This will cause an error in converter, but might be needed for BO3, appears to be on ALL anims.
-							)
-			if cmds.checkBox("Scoba_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
-				continue
-			if "sndnt#" in noteName:
-				noteName = noteName[6:] # This essentially, in laymans terms, strips the notetrack's name of the first 6 characters if it contains "sndnt#" in the name.
-			if "rmbnt#" in noteName:
-				noteName = noteName[6:]
-			noteList += "%s:%i," % (noteName, note) # Add Notes to Aidan's list.
-			cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-			cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, append=noteName, selectIndexedItem=len((existingItems or []))+1)
-	else:
-		cmds.confirmDialog( title='ERROR', message='Can\'t find Notetracks for Wriath Anim or Normal anim.' , button=['Ok'], defaultButton='Ok') 
-
-	XCamWindow_SelectNote()
-
+	XAnimWindow_SelectNote()
 
 def RenameXcamNotes(required_parameter):
 	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
@@ -2881,6 +2851,13 @@ def AboutWindow():
 		GoToForumTopic()
 	elif result == "CoD File Formats":
 		webbrowser.open("http://aidanshafran.com/codmayatools/codformats.html")
+
+def LegacyWindow():
+	result = cmds.confirmDialog(message="""CoD1 mode exports models that are compatible with CoD1.
+When this mode is disabled, the plugin will export models that are compatible with CoD2 and newer.
+
+BO3 Mode is only supported in BO3, but it lets you have models with >65535 vertices.
+BO3 Mode overrides CoD1 mode if active.""", button=['OK'], defaultButton='OK', title="Legacy options")
 		
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # --------------------------------------------------------------------------- Versioning ---------------------------------------------------------------------------
@@ -3085,53 +3062,6 @@ def GetExport2Bin(skipSet=True):
 
 	return export2binpath
 
-def UseExport2Bin():
-	bE2B = "off"
-	try:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
-		bE2B = reg.QueryValueEx(storageKey, "UseExport2Bin")[0]
-		reg.CloseKey(storageKey)
-	except WindowsError:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-		reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, "off")
-		reg.CloseKey(storageKey)
-
-	if bE2B == "on":
-		res = True
-	else:
-		res = False
-
-	if GetExport2Bin() == "":
-		res = False
-
-	return res
-
-def ToggleE2B():
-	bE2B = "off"
-	try:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
-		bE2B = reg.QueryValueEx(storageKey, "UseExport2Bin")[0]
-		reg.CloseKey(storageKey)
-	except WindowsError:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-		reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, "off")
-		reg.CloseKey(storageKey)
-
-	if bE2B == "off":
-		bE2B = "on"
-	else:
-		bE2B = "off"
-
-	if GetExport2Bin() == "":
-		bE2B = "off"
-		if cmds.confirmDialog(message="You need to set Export2Bin path first!\nDo you want to set the path to Export2Bin?", button=['Yes','No'], title="Error") == "yes":
-			if not SetExport2Bin() == "":
-				bE2B = "on"
-
-	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-	reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, bE2B)
-	reg.CloseKey(storageKey)
-	CreateMenu()
  	
 def ForceExport2Bin(yesno):
 	try:
@@ -3145,6 +3075,61 @@ def ForceExport2Bin(yesno):
 
 	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
 	reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, yesno)
+	reg.CloseKey(storageKey)
+	CreateMenu()
+
+# Support for custom options, so I don't have to make new funca
+def UseOption(name, default="off"):
+	bE2B = default
+	try:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
+		bE2B = reg.QueryValueEx(storageKey, "Use%s" % name)[0]
+		reg.CloseKey(storageKey)
+	except WindowsError:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
+		reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, "off")
+		reg.CloseKey(storageKey)
+
+	if bE2B == "on":
+		res = True
+	else:
+		res = False
+
+	return res
+
+def ToggleOption(name, default="off"):
+	bE2B = default
+	try:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
+		bE2B = reg.QueryValueEx(storageKey, "Use%s" % name)[0]
+		reg.CloseKey(storageKey)
+	except WindowsError:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
+		reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, "off")
+		reg.CloseKey(storageKey)
+
+	if bE2B == "off":
+		bE2B = "on"
+	else:
+		bE2B = "off"
+
+	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
+	reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, bE2B)
+	reg.CloseKey(storageKey)
+	CreateMenu()
+    
+def ForceOption(name, yesno):
+	try:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
+		bE2B = reg.QueryValueEx(storageKey, "Use%s" % name)[0]
+		reg.CloseKey(storageKey)
+	except WindowsError:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
+		reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, "off")
+		reg.CloseKey(storageKey)
+
+	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
+	reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, yesno)
 	reg.CloseKey(storageKey)
 	CreateMenu()
 	
@@ -3257,6 +3242,32 @@ def getObjectByAlias(aname):
 		return ""
 	return cmds.getAttr("CoDMayaTools.objAlias%s" % aname) or ""
 
+def SetToggableOption(name="", val=0):
+	if not val:
+		val = int(cmds.menuItem(name, query=True, checkBox=True ))
+
+	try:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
+	except WindowsError:
+		storageKey = reg.CreateKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
+
+	reg.SetValueEx(storageKey, "Setting_%s" % name, 0, reg.REG_DWORD, val )
+
+def QueryToggableOption(name=""):
+	try:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
+		reg.QueryValueEx(storageKey, "Setting_%s" % name)[0]
+	except WindowsError:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
+		try:
+			reg.SetValueEx(storageKey, "Setting_%s" % name, 0, reg.REG_DWORD , 0 )
+		except:
+			return
+
+	return reg.QueryValueEx(storageKey, "Setting_%s" % name)[0]
+
+
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------ Init ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -3278,6 +3289,7 @@ def CreateMenu():
 	cmds.menuItem(label="Create New Gunsleeve Maya File", command=CreateNewGunsleeveMayaFile)
 	cmds.menuItem(label="Create New ViewModel Rig File", command=CreateNewViewmodelRigFile)
 	cmds.menuItem(label="Switch Gun in Current Rig File", command=SwitchGunInCurrentRigFile)
+#	AddToggleableOption("AutoRename","Automatically rename joints")
 	cmds.setParent(menu, menu=True)
 	
 	# Import tools
@@ -3325,13 +3337,20 @@ def CreateMenu():
 #	cmds.menuItem(label="CoD5", command="CoDMayaTools.SetGame('CoD5')")
 #	cmds.menuItem(label="CoD4", command="CoDMayaTools.SetGame('CoD4')")
 #	cmds.setParent(menu, menu=True)
-	if UseExport2Bin():
-		cmds.menuItem(label="Export2Bin: on", command="CoDMayaTools.ToggleE2B()")
-	else:
-		cmds.menuItem(label="Export2Bin: off", command="CoDMayaTools.ToggleE2B()")
+
+	cmds.menuItem(label="Settings", subMenu=True)
+	cmds.menuItem(label="Set Root Folder",  command="CoDMayaTools.SetRootFolder(None, 'CoD5')")
+	cmds.menuItem(divider=True)
+	cmds.menuItem("E2B", label='Use Export2Bin', checkBox=QueryToggableOption('E2B'), command="CoDMayaTools.SetToggableOption('E2B')" )
 	cmds.menuItem(label="Set Path to Export2Bin", command="CoDMayaTools.SetExport2Bin()")
 	cmds.menuItem(divider=True)
-	
+	cmds.menuItem("AutomaticRename", label='Automatically rename joints (J_GUN, etc.)', checkBox=QueryToggableOption('AutomaticRename'), command="CoDMayaTools.SetToggableOption('AutomaticRename')" )
+	cmds.menuItem(divider=True)
+	cmds.menuItem("BO3Mode", label='BO3 Mode', checkBox=QueryToggableOption('BO3Mode'), command="CoDMayaTools.SetToggableOption('BO3Mode')" )
+	cmds.menuItem("CoD1Mode", label='CoD1 Mode', checkBox=QueryToggableOption('CoD1Mode'), command="CoDMayaTools.SetToggableOption('CoD1Mode')" )
+	cmds.menuItem(label="What are those Legacy options?", command="CoDMayaTools.LegacyWindow()")
+	cmds.setParent(menu, menu=True)
+	cmds.menuItem(divider=True)
 	# For easy script updating
 	cmds.menuItem(label="Reload Script", command="reload(CoDMayaTools)")
 	
@@ -3351,10 +3370,6 @@ try:
 except WindowsError:
 	storageKey = reg.CreateKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1]) # Seems to fail because above in the bin function it tries to open the key but doesn't exist and stops there, so I heck it and added this.
 
-CreateMenu()
-CreateXAnimWindow()
-CreateXModelWindow()
-CreateXCamWindow()
 try:
 	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
 	codRootPath = reg.QueryValueEx(storageKey, "RootPath")[0]
@@ -3364,8 +3379,14 @@ except WindowsError:
 	SetRootFolder()
 	res = cmds.confirmDialog(message="Are you using Export2Bin? (only required for Black Ops 3)", button=['Yes', 'No'], defaultButton='No', title="First time configuration")
 	if res == "Yes":
-		SetExport2Bin()
-		ForceExport2Bin("on")
+		SetToggableOption(name="E2B", val=1)
 	else:
-		ForceExport2Bin("off")
+		SetToggableOption(name="E2B", val=0)
 	cmds.confirmDialog(message="You're set! You can now export models and anims to any CoD!")
+
+CreateMenu()
+CreateXAnimWindow()
+CreateXModelWindow()
+CreateXCamWindow()
+
+print "CoDMayaTools initialized."
