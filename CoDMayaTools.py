@@ -108,6 +108,13 @@ OBJECT_NAMES = 	{'menu'  : 		["CoDMayaToolsMenu",    		"Call of Duty Tools", 	No
 				 'xcam' :		["CoDMayaXCamExportWindow",  	"Export XCam",			"XCamExporterInfo",		"RefreshXCamWindow",	"ExportXCam"]}
 
 currentGame = "none"
+RENAME_DICTONARY = {("tag_weapon", "tag_torso") : "tag_weapon_right",
+					("tag_weapon1", "tag_torso") : "tag_weapon_left",
+					("j_gun", None) : "tag_weapon",
+					("j_gun1", None) : "tag_weapon_le",
+					("tag_flash1", "j_gun1") : "tag_flash_le",
+					("tag_brass1", None) : "tag_brass_le",
+}
 				 
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------- Import Common --------------------------------------------------------------------------
@@ -722,8 +729,15 @@ def IWIToDDSUser():
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def GetJointList():
 	joints = []
-	cosmeticBone = cmds.getAttr(OBJECT_NAMES["xmodel"][2]+ ".Cosmeticbone")
+	# Try get the cosmetic bone.
+	try:
+		cosmeticBone = cmds.getAttr(OBJECT_NAMES["xmodel"][2]+ ".Cosmeticbone")
+	except:
+		# No cosmetic set.
+		cosmeticBone = None
+	# Cosmetic Bones List
 	cosmetic_list = []
+	# Cosmetic Bone ID (for xmodel_export)
 	cosmetic_id = 0
 	
 	# Get selected objects
@@ -749,17 +763,35 @@ def GetJointList():
 			index = len(joints)
 			
 			if node[2]:
-				# No root bone.
+				# Don't use main root bone.
 				if node[0] > -1:
-					if joints[node[0]][1].partialPathName() == cosmeticBone:
-						cosmetic_list.append((node[0], node[1]))
-					else:
-						joints.append((node[0], node[1]))
+					# Name of the bones parent, none for Root bone.
+					bone_parentname = joints[node[0]][1].split(":")[-1]
 				else:
-					joints.append((node[0], node[1]))
+					# Skip.
+					bone_parentname = None
+				# Name of the bone.
+				bone_name = node[1].partialPathName().split(":")[-1]
+				# Check for automatic rename.
+				if QueryToggableOption("AutomaticRename"):
+					# Run over dictonary for possible joints to rename.
+					for potjoints, new_name in RENAME_DICTONARY.iteritems():
+						# Found one
+						if bone_name == potjoints[0]:
+							# Check if it's a child bone of what we want, None to rename regardless.
+							if potjoints[1] is None or potjoints[1] == bone_parentname: 
+								bone_name = new_name
 
-
-				if node[1].partialPathName() == cosmeticBone:
+				# Check if we have cosmetic bone.
+				if cosmeticBone is not None and bone_parentname == cosmeticBone:
+					# Append it.
+					cosmetic_list.append((node[0], bone_name, node[1]))
+				else:
+					# Not a cosmetic, add it to normal joints.
+					joints.append((node[0], bone_name, node[1]))
+				
+				# Our cosmetic parent.
+				if bone_name == cosmeticBone:
 					cosmetic_id = index
 
 
@@ -774,6 +806,7 @@ def GetJointList():
 		
 		ProgressBarStep()
 
+	# Cosmetic bones must be at the end, so append them AFTER we've added other bones.
 	for joint in cosmetic_list:
 		joints.append(joint)
 	
@@ -929,7 +962,6 @@ def WriteCameraData(f, cameraNode):
 	WriteNodeFloat(f, "fstop", 0.7)
 	WriteNodeFloat(f, "lense", 10, True)
 
-
 	
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # -------------------------------------------------------------------------- Export XModel -------------------------------------------------------------------------
@@ -993,22 +1025,15 @@ def ExportXModel(filePath):
 		f.write("Z 0.000000 0.000000 1.000000\n")
 	else:
 		f.write("NUMBONES %i\n" % len(joints[0]))
-		if joints[1] > 0:
+		if len(joints[1]) > 0:
 			# NUMCOSMETICS COUNT PARENTID
 			f.write("NUMCOSMETICS %i %i\n" % (len(joints[1]), joints[2]) )
 		for i, joint in enumerate(joints[0]):
-			name = joint[1].partialPathName().split("|")
-			name = name[len(name) - 1].split(":") # Remove namespace prefixes
-			name = name[len(name) - 1]
-			if name == "tag_weapon" and QueryToggableOption("AutomaticRename"):
-				name = "tag_weapon_right"
-			elif name == "j_gun" and QueryToggableOption("AutomaticRename"):
-				name = "tag_weapon"
-			f.write("BONE %i %i \"%s\"\n" % (i, joint[0], name))
+			f.write("BONE %i %i \"%s\"\n" % (i, joint[0], joint[1]))
 		
 		for i, joint in enumerate(joints[0]):
 			f.write("\nBONE %i\n" % i)
-			WriteJointData(f, joint[1])
+			WriteJointData(f, joint[2])
 
 	# Write verts
 	if QueryToggableOption("BO3Mode"):
@@ -1081,7 +1106,10 @@ def ExportXModel(filePath):
 	ProgressBarStep()
 	cmds.refresh()
 	if QueryToggableOption('E2B'):
-		RunExport2Bin(filePath)
+		try:
+			RunExport2Bin(filePath)
+		except:
+			MessageBox("The model exported successfully however Export2Bin failed to run, the model will need to be converted manually.\n\nPlease check your paths.")
 
 def GetMaterialsFromMesh(mesh, dagPath):
 	textures = {}
@@ -1161,7 +1189,7 @@ def GetShapes(joints):
 	# Convert the joints to a dictionary, for simple searching for joint indices
 	jointDict = {}
 	for i, joint in enumerate(joints):
-		jointDict[joint[1].partialPathName()] = i
+		jointDict[joint[2].partialPathName()] = i
 	
 	# Get all selected objects
 	selectedObjects = OpenMaya.MSelectionList()
@@ -1371,7 +1399,7 @@ def ExportXAnim(filePath):
 	
 	# Get data
 	joints = GetJointList()
-	if len(joints) == 0:
+	if len(joints[0]) == 0:
 		return "Error: No joints selected for export"
 #	if len(joints) > 128:
 #		print "Warning: More than 128 joints have been selected. The animation might not work in WaW"
@@ -1414,16 +1442,9 @@ def ExportXAnim(filePath):
 	f.write("VERSION 3\n\n")
 	
 	# Write parts
-	f.write("NUMPARTS %i\n" % len(joints))
-	for i, joint in enumerate(joints):
-		name = joint[1].partialPathName().split("|")
-		name = name[len(name)-1].split(":") # Remove namespace prefixes
-		name = name[len(name)-1]
-		if name == "tag_weapon" and QueryToggableOption("AutomaticRename"):
-			name = "tag_weapon_right"
-		elif name == "j_gun" and QueryToggableOption("AutomaticRename"):
-			name = "tag_weapon"
-		f.write("PART %i \"%s\"\n" % (i, name))
+	f.write("NUMPARTS %i\n" % len(joints[0]))
+	for i, joint in enumerate(joints[0]):
+		f.write("PART %i \"%s\"\n" % (i, joint[1]))
 	
 	fLength = ((frameEnd-frameStart+1) / multiplier)
 	# Write animation data
@@ -1438,9 +1459,9 @@ def ExportXAnim(filePath):
 		else:
 			cmds.currentTime(i*multiplier)
 		
-		for j, joint in enumerate(joints):
+		for j, joint in enumerate(joints[0]):
 			f.write("\nPART %i\n" % j)
-			WriteJointData(f, joint[1])
+			WriteJointData(f, joint[2])
 	
 	cmds.currentTime(currentFrame)
 	
@@ -1468,7 +1489,7 @@ def ExportXAnim(filePath):
 		cleanNotes.append((name, frame))
 		
 	f.write("\nNOTETRACKS\n")
-	for i, joint in enumerate(joints):
+	for i, joint in enumerate(joints[0]):
 		if i == 0 and len(cleanNotes) > 0:
 			f.write("\nPART 0\nNUMTRACKS 1\nNOTETRACK 0\n")
 			f.write("NUMKEYS %i\n" % len(cleanNotes))
@@ -1482,7 +1503,10 @@ def ExportXAnim(filePath):
 	cmds.refresh()
 
 	if QueryToggableOption('E2B'):
-		RunExport2Bin(filePath)
+		try:
+			RunExport2Bin(filePath)
+		except:
+			MessageBox("The animation exported successfully however Export2Bin failed to run, the animation will need to be converted manually.\n\nPlease check your paths.")
 	
 def WriteDummyTargetModelBoneRoot(f, numframes):
 	f.write("""
@@ -2136,7 +2160,7 @@ def ReadXanimNotes(required_parameter):
 										)
 						if cmds.checkBox("CoDMAYA_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
 							continue
-						if NoteTrack == "end":
+						if NoteTrack == "end" or NoteTrack == "loop_end":
 							continue
 						noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
 						cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
