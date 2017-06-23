@@ -6,21 +6,6 @@
 * Export XCams for BO3
 * Cosmetic bones for use in Black Ops 3.
 
-## Cosmetic Bones:
-For most models coming from Bo3 it's usually obvious what the cosmetic bone is, it usually has quite a number of bones without children under it (for character models, it's usually "head").
-
-All cosmetic bones share the same parent, and thus it was easier to mark 1 joint, to do this:
-
-1) Select the parent of the cosmetic bones.
-
-2) In the export window select "Set selected as Cosmetic Parent", CoD Maya Tools will tell you it's been marked.
-
-3) Export as normal.
-
-#### The model MUST be converted using DTZxPorter's ExportX, NOT Export2Bin, to download ExportX click here and go to the Utilities tab
-
-[exportx](http://aviacreations.com/wraith/)
-
 ## Installation:
 1) Download the [repository](https://github.com/Ray1235/CoDMayaTools/archive/master.zip) or just the [CoDMayaTools.py](https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/CoDMayaTools.py) file (right click & save). You'll only need that single file.
 
