@@ -17,7 +17,7 @@ All cosmetic bones share the same parent, and thus it was easier to mark 1 joint
 
 3) Export as normal.
 
-# The model MUST be converted using DTZxPorter's ExportX, NOT Export2Bin, to download ExportX click here and go to the Utilities tab
+#### The model MUST be converted using DTZxPorter's ExportX, NOT Export2Bin, to download ExportX click here and go to the Utilities tab
 
 [exportx](http://aviacreations.com/wraith/)
 
