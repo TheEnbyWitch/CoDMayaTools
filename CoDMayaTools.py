@@ -722,6 +722,9 @@ def IWIToDDSUser():
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def GetJointList():
 	joints = []
+	cosmeticBone = cmds.getAttr(OBJECT_NAMES["xmodel"][2]+ ".Cosmeticbone")
+	cosmetic_list = []
+	cosmetic_id = 0
 	
 	# Get selected objects
 	selectedObjects = OpenMaya.MSelectionList()
@@ -746,7 +749,20 @@ def GetJointList():
 			index = len(joints)
 			
 			if node[2]:
-				joints.append((node[0], node[1]))
+				# No root bone.
+				if node[0] > -1:
+					if joints[node[0]][1].partialPathName() == cosmeticBone:
+						cosmetic_list.append((node[0], node[1]))
+					else:
+						joints.append((node[0], node[1]))
+				else:
+					joints.append((node[0], node[1]))
+
+
+				if node[1].partialPathName() == cosmeticBone:
+					cosmetic_id = index
+
+
 			else:
 				index = node[0]
 			
@@ -757,8 +773,11 @@ def GetJointList():
 				searchQueue.put((index, childNode, selectedObjects.hasItem(dagPath) and dagPath.hasFn(OpenMaya.MFn.kJoint)))
 		
 		ProgressBarStep()
+
+	for joint in cosmetic_list:
+		joints.append(joint)
 	
-	return joints
+	return joints, cosmetic_list, cosmetic_id
 
 def GetCameraList():
 	cameras = []
@@ -927,7 +946,7 @@ def ExportXModel(filePath):
 	joints = GetJointList()
 #	if len(joints) > 128:
 #		return "Error: More than 128 joints"
-	shapes = GetShapes(joints)
+	shapes = GetShapes(joints[0])
 	if type(shapes) == str:
 		return shapes
 	
@@ -973,8 +992,11 @@ def ExportXModel(filePath):
 		f.write("Y 0.000000 1.000000 0.000000\n")
 		f.write("Z 0.000000 0.000000 1.000000\n")
 	else:
-		f.write("NUMBONES %i\n" % len(joints))
-		for i, joint in enumerate(joints):
+		f.write("NUMBONES %i\n" % len(joints[0]))
+		if joints[1] > 0:
+			# NUMCOSMETICS COUNT PARENTID
+			f.write("NUMCOSMETICS %i %i\n" % (len(joints[1]), joints[2]) )
+		for i, joint in enumerate(joints[0]):
 			name = joint[1].partialPathName().split("|")
 			name = name[len(name) - 1].split(":") # Remove namespace prefixes
 			name = name[len(name) - 1]
@@ -984,7 +1006,7 @@ def ExportXModel(filePath):
 				name = "tag_weapon"
 			f.write("BONE %i %i \"%s\"\n" % (i, joint[0], name))
 		
-		for i, joint in enumerate(joints):
+		for i, joint in enumerate(joints[0]):
 			f.write("\nBONE %i\n" % i)
 			WriteJointData(f, joint[1])
 
@@ -1855,6 +1877,7 @@ def CreateXModelWindow():
 	
 	exportMultipleSlotsButton = cmds.button(label="Export Multiple Slots", command="CoDMayaTools.GeneralWindow_ExportMultiple('xmodel')", annotation="Automatically export multiple slots at once, using each slot's saved selection")
 	exportInMultiExportCheckbox = cmds.checkBox(OBJECT_NAMES['xmodel'][0]+"_UseInMultiExportCheckBox", label="Use current slot for Export Multiple", changeCommand="CoDMayaTools.GeneralWindow_ExportInMultiExport('xmodel')", annotation="Check this make the 'Export Multiple Slots' button export this slot")
+	setCosmeticParentbone = cmds.button(OBJECT_NAMES['xmodel'][0]+"_MarkCosmeticParent", label="Set selected as Cosmetic Parent", command="CoDMayaTools.SetCosmeticParent('xmodel')", annotation="Set this bone as our cosmetic parent. All bones under this will be cosmetic.")
 
 	# Setup form
 	cmds.formLayout(form, edit=True,
@@ -1866,7 +1889,8 @@ def CreateXModelWindow():
 					(exportMultipleSlotsButton, 'bottom', 6), (exportMultipleSlotsButton, 'left', 10),
 					(exportInMultiExportCheckbox, 'bottom', 9), (exportInMultiExportCheckbox, 'right', 6),
 					(exportSelectedButton, 'left', 10),
-					(saveSelectionButton, 'right', 10)],
+					(saveSelectionButton, 'right', 10),
+					(setCosmeticParentbone, 'left', 10)],
 					#(exportSelectedButton, 'bottom', 6), (exportSelectedButton, 'left', 10),
 					#(saveSelectionButton, 'bottom', 6), (saveSelectionButton, 'right', 10),
 					#(getSavedSelectionButton, 'bottom', 6)],
@@ -1877,7 +1901,11 @@ def CreateXModelWindow():
 						(fileBrowserButton, 'bottom', 5, exportSelectedButton),
 						(exportSelectedButton, 'bottom', 5, separator2),
 						(saveSelectionButton, 'bottom', 5, separator2),
+						(setCosmeticParentbone, 'bottom', 5, separator2),
+						(saveSelectionButton, 'bottom', 5, setCosmeticParentbone),
+						(exportSelectedButton, 'bottom', 5, setCosmeticParentbone),
 						(getSavedSelectionButton, 'bottom', 5, separator2), (getSavedSelectionButton, 'right', 10, saveSelectionButton),
+						(getSavedSelectionButton, 'bottom', 5, setCosmeticParentbone),
 						(separator2, 'bottom', 5, exportMultipleSlotsButton)])
 
 def RefreshXModelWindow():
@@ -1898,7 +1926,9 @@ def RefreshXModelWindow():
 	if not cmds.attributeQuery("useinmultiexport", node=OBJECT_NAMES['xmodel'][2], exists=True):
 		cmds.addAttr(OBJECT_NAMES['xmodel'][2], longName="useinmultiexport", multi=True, attributeType='bool', defaultValue=False)
 		cmds.setAttr(OBJECT_NAMES['xmodel'][2]+".useinmultiexport", size=EXPORT_WINDOW_NUMSLOTS)
-		
+	if not cmds.attributeQuery("Cosmeticbone", node=OBJECT_NAMES['xmodel'][2], exists=True):
+		cmds.addAttr(OBJECT_NAMES['xmodel'][2], longName="Cosmeticbone", dataType="string")	
+
 	cmds.lockNode(OBJECT_NAMES['xmodel'][2], lock=True)
 	
 	# Set values
@@ -1910,6 +1940,20 @@ def RefreshXModelWindow():
 	useInMultiExport = cmds.getAttr(OBJECT_NAMES['xmodel'][2]+(".useinmultiexport[%i]" % slotIndex))
 	cmds.checkBox(OBJECT_NAMES['xmodel'][0]+"_UseInMultiExportCheckBox", edit=True, value=useInMultiExport)
 	
+
+def SetCosmeticParent(reqarg):
+	selection = cmds.ls(selection = True, type = "joint")  
+
+	if(len(selection) > 1):
+		MessageBox("Only 1 Cosmetic Parent is allowed.")
+		return
+	elif(len(selection) == 0):
+		MessageBox("No joint selected.")
+		return		
+
+	cmds.setAttr(OBJECT_NAMES['xmodel'][2] + ".Cosmeticbone", selection[0], type="string")
+
+	MessageBox("\"%s\" has now been set as the cosmetic parent." % str(selection[0]))
 	
 	
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------

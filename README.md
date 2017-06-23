@@ -1,3 +1,5 @@
+## THIS IS THE DEVELOPMENT BRANCH WHERE WE ADD SP00ki THINGS, EXPECT ISSUES.
+
 ## New features in comparison to Aidan's original version:
 * Full support for BO3 and Export2Bin
 * Backwards compatibility with CoD1 (untested & xmodels only)
@@ -28,3 +30,18 @@ python("import CoDMayaTools");
 5) First-time config will occur. The plugin will ask you for your game's root directory and if you'll be using Export2Bin.
 
 6) You're all set! Be sure to visit this repo often for updates!
+
+## Cosmetic Bones:
+For most models coming from Bo3 it's usually obvious what the cosmetic bone is, it usually has quite a number of bones without children under it (for character models, it's usually "head").
+
+All cosmetic bones share the same parent, and thus it was easier to mark 1 joint, to do this:
+
+1) Select the parent of the cosmetic bones.
+
+2) In the export window select "Set selected as Cosmetic Parent", CoD Maya Tools will tell you it's been marked.
+
+3) Export as normal.
+
+#### The model MUST be converted using DTZxPorter's ExportX, NOT Export2Bin, to download ExportX click here and go to the Utilities tab
+
+[exportx](http://aviacreations.com/wraith/)
