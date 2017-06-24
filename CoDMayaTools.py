@@ -1015,7 +1015,7 @@ def ExportXModel(filePath):
 		f.write("VERSION 6\n\n")
 	
 	# Write joints
-	if len(joints) == 0:
+	if len(joints[0]) == 0:
 		print "No joints selected; exporting with a default TAG_ORIGIN."
 		f.write("NUMBONES 1\n")
 		f.write("BONE 0 -1 \"TAG_ORIGIN\"\n\n")
@@ -1042,7 +1042,7 @@ def ExportXModel(filePath):
 	f.write("\nNUMVERTS %i\n" % len(shapes["verts"]))
 	for i, vert in enumerate(shapes["verts"]):
 		f.write("VERT %i\n" % i)
-		if QueryToggableOption("CoD1Mode") and not QueryToggableOption("BO3Mode"):
+		if QueryToggableOption("CoD1Mode"):
 			f.write("OFFSET %f %f %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
 		else:
 			f.write("OFFSET %f, %f, %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
