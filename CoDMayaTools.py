@@ -58,9 +58,17 @@
 #	* Added support for CoD1 (untested)
 #	* Added support for BO3 xmodel_export keywords
 #	* Added an option to automatically rename tag_weapon and j_gun joints
+# VERSION 2.5
+#   * Fixed progression bars on xanim and xmodel exports.
+#	* Fixed auto-rename to only rename under certain conditions (i.e. rename only tag_weapon to tag_weapon_right if it's a child of tag_torso)
+#	+ Added support for cosmetic bones.
+#	+ Added clear notes button to remove all notes in xanim window.
+#	+ Added support for ExportX, Export2Bin still works. (ExportX is required for cosmetic bones).
+#	+ Armature Only models are now allowed for animation models.
+#	- Removed Ignore Useless notes, it's hard to determine a "useless note", if you don't want notes like "reload_large" then remove them manually.
+#	- Removed Bo3 Mode, if you have models with greater than 65k verts, use ExportX.
+#	
 #
-
-# TODO: Speed up joint weight loading
 
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ---------------------------------------------------------- Customization (You can change these values!) ----------------------------------------------------------
@@ -731,7 +739,7 @@ def GetJointList():
 	joints = []
 	# Try get the cosmetic bone.
 	try:
-		cosmeticBone = cmds.getAttr(OBJECT_NAMES["xmodel"][2]+ ".Cosmeticbone")
+		cosmeticBone = cmds.getAttr(OBJECT_NAMES["xmodel"][2]+ ".Cosmeticbone").split("|")[-1].split(":")[-1]
 	except:
 		# No cosmetic set.
 		cosmeticBone = None
@@ -752,7 +760,6 @@ def GetJointList():
 		
 		# Ignore nodes that aren't joints or arn't top-level
 		if not dagPath.hasFn(OpenMaya.MFn.kJoint) or not RecursiveCheckIsTopNode(selectedObjects, dagNode):
-			ProgressBarStep()
 			continue
 		
 		# Breadth first search of joint tree
@@ -766,12 +773,12 @@ def GetJointList():
 				# Don't use main root bone.
 				if node[0] > -1:
 					# Name of the bones parent, none for Root bone.
-					bone_parentname = joints[node[0]][1].split(":")[-1]
+					bone_parentname = joints[node[0]][1].split("|")[-1].split(":")[-1]
 				else:
 					# Skip.
 					bone_parentname = None
 				# Name of the bone.
-				bone_name = node[1].partialPathName().split(":")[-1]
+				bone_name = node[1].partialPathName().split("|")[-1].split(":")[-1]
 				# Check for automatic rename.
 				if QueryToggableOption("AutomaticRename"):
 					# Run over dictonary for possible joints to rename.
@@ -803,8 +810,6 @@ def GetJointList():
 				childNode = OpenMaya.MFnDagNode(node[1].child(i))
 				childNode.getPath(dagPath)
 				searchQueue.put((index, childNode, selectedObjects.hasItem(dagPath) and dagPath.hasFn(OpenMaya.MFn.kJoint)))
-		
-		ProgressBarStep()
 
 	# Cosmetic bones must be at the end, so append them AFTER we've added other bones.
 	for joint in cosmetic_list:
@@ -971,8 +976,6 @@ def ExportXModel(filePath):
 	numSelectedObjects = len(cmds.ls(selection=True))
 	if numSelectedObjects == 0:
 		return "Error: No objects selected for export"
-		
-	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue=numSelectedObjects*2+1)
 
 	# Get data
 	joints = GetJointList()
@@ -1004,9 +1007,8 @@ def ExportXModel(filePath):
 		f.write("// Source filename: Unsaved\n")
 	f.write("// Export time: %s\n\n" % datetime.datetime.now().strftime("%a %b %d %Y, %H:%M:%S")) 
 	f.write("MODEL\n")
-	if QueryToggableOption("BO3Mode"):
-		f.write("VERSION 7\n\n")
-	elif QueryToggableOption("CoD1Mode"):
+
+	if QueryToggableOption("CoD1Mode"):
 		f.write("VERSION 5\n\n")
 	else:
 		f.write("VERSION 6\n\n")
@@ -1036,15 +1038,9 @@ def ExportXModel(filePath):
 			WriteJointData(f, joint[2])
 
 	# Write verts
-	if QueryToggableOption("BO3Mode"):
-		f.write("\nNUMVERTS32 %i\n" % len(shapes["verts"]))
-	else:
-		f.write("\nNUMVERTS %i\n" % len(shapes["verts"]))
+	f.write("\nNUMVERTS %i\n" % len(shapes["verts"]))
 	for i, vert in enumerate(shapes["verts"]):
-		if QueryToggableOption("BO3Mode"):
-			f.write("VERT32 %i\n" % i)
-		else:
-			f.write("VERT %i\n" % i)
+		f.write("VERT %i\n" % i)
 		if QueryToggableOption("CoD1Mode") and not QueryToggableOption("BO3Mode"):
 			f.write("OFFSET %f %f %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
 		else:
@@ -1055,23 +1051,19 @@ def ExportXModel(filePath):
 				f.write("BONE %i %f\n" % (bone[0], bone[1]))
 		else:
 			f.write("BONE 0 1.000000\n")
+		ProgressBarStep()
 		f.write("\n")
 	
 	# Write faces
 	f.write("NUMFACES %i\n" % len(shapes["faces"]))
 	for j, face in enumerate(shapes["faces"]):
-		if QueryToggableOption("BO3Mode"):
-			f.write("TRI16 %i %i 0 0\n" % (face[0], face[1]))
-		else:
-			f.write("TRI %i %i 0 0\n" % (face[0], face[1]))
+		f.write("TRI %i %i 0 0\n" % (face[0], face[1]))
 		for i in range(0, 3):
-			if QueryToggableOption("BO3Mode"):
-				f.write("VERT32 %i\n" % face[2][i])
-			else:
-				f.write("VERT %i\n" % face[2][i])
+			f.write("VERT %i\n" % face[2][i])
 			f.write("NORMAL %f %f %f\n" % (face[5][i].x, face[5][i].y, face[5][i].z))
 			f.write("COLOR %f %f %f %f\n" % (face[4][i].r, face[4][i].g, face[4][i].b, face[4][i].a))
 			f.write("UV 1 %f %f\n" % (face[3][i][0], face[3][i][1]))
+		ProgressBarStep()
 		f.write("\n")
 	
 	# Write objects
@@ -1081,11 +1073,10 @@ def ExportXModel(filePath):
 	
 	# Write materials
 	f.write("\nNUMMATERIALS %i\n" % len(shapes["materials"]))
-	if QueryToggableOption("CoD1Mode") and not QueryToggableOption("BO3Mode"):
-		for i, material in enumerate(shapes["materials"]):
+	for i, material in enumerate(shapes["materials"]):
+		if QueryToggableOption("CoD1Mode"):
 			f.write("MATERIAL %i \"%s\"\n" % (i, material[0].split(":")[-1]))
-	else:
-		for i, material in enumerate(shapes["materials"]):
+		else:
 			f.write("MATERIAL %i \"%s\" \"%s\" \"%s\"\n" % (i, material[0].split(":")[-1], "Lambert", material[1]))
 		
 			# According to the Modrepository page on the XModel format, the following values don't matter
@@ -1177,6 +1168,39 @@ def VerticesObjRelToLocalRel(vertexIndices, toConvertVertexIndices):
 			return False
 	
 	return localVertexIndices
+
+# Get count for progress bar. No impact on export speed.
+def GetNumInfo(selectedObjects):
+	# Mesh array to check for duplicates.
+	meshes = []
+	maxValue = 0
+
+	for i in range(0, selectedObjects.length()):
+		# Grab mesh.
+		object = OpenMaya.MObject()
+		dagPath = OpenMaya.MDagPath()
+		selectedObjects.getDependNode(i, object)
+		selectedObjects.getDagPath(i, dagPath)
+		# Check it's a mesh.
+		if not dagPath.hasFn(OpenMaya.MFn.kMesh):
+			ProgressBarStep()
+			continue
+		dagPath.extendToShape()
+		# Check for duplicate.
+		if dagPath.partialPathName() in meshes:
+			ProgressBarStep()
+			continue
+		# Append.
+		meshes.append(dagPath.partialPathName())
+		# Get vert count for this mesh.
+		maxValue += OpenMaya.MItMeshVertex(dagPath).count()
+		# Get Face found for this mesh.
+		maxValue += OpenMaya.MItMeshPolygon(dagPath).count()
+
+	# Return value * 2 because we will loop over 2x for getting info and writing it to export.
+	return maxValue * 2 + 1
+
+		
 	
 def GetShapes(joints):
 	# Vars
@@ -1197,6 +1221,10 @@ def GetShapes(joints):
 	
 	# The global vert index at the start of each object
 	currentStartingVertIndex = 0
+
+	progressInfo = GetNumInfo(selectedObjects)
+
+	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue = progressInfo)
 	
 	# Loop through all objects
 	for i in range(0, selectedObjects.length()):
@@ -1283,10 +1311,13 @@ def GetShapes(joints):
 			))
 			
 			# Next vert
+			ProgressBarStep()
 			vertIter.next()
 		
 		# Get materials used by this mesh
 		meshMaterials = GetMaterialsFromMesh(mesh, dagPath)
+
+		
 		
 		# Loop through all faces
 		polyIter = OpenMaya.MItMeshPolygon(dagPath)
@@ -1364,6 +1395,7 @@ def GetShapes(joints):
 				))
 			
 			# Next poly
+			ProgressBarStep()
 			polyIter.next()
 		
 		# Update starting vertex index
@@ -1394,9 +1426,7 @@ def ExportXAnim(filePath):
 	numSelectedObjects = len(cmds.ls(selection=True))
 	if numSelectedObjects == 0:
 		return "Error: No objects selected for export"
-	
-	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue=numSelectedObjects+1)
-	
+
 	# Get data
 	joints = GetJointList()
 	if len(joints[0]) == 0:
@@ -1430,6 +1460,8 @@ def ExportXAnim(filePath):
 	except (IOError, OSError) as e:
 		typex, value, traceback = sys.exc_info()
 		return "Unable to create files:\n\n%s" % value.strerror
+
+	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue=frameEnd)
 	
 	# Write header
 	f.write("// Export filename: '%s'\n" % os.path.normpath(filePath))
@@ -1462,6 +1494,8 @@ def ExportXAnim(filePath):
 		for j, joint in enumerate(joints[0]):
 			f.write("\nPART %i\n" % j)
 			WriteJointData(f, joint[2])
+
+		ProgressBarStep()
 	
 	cmds.currentTime(currentFrame)
 	
@@ -1499,7 +1533,7 @@ def ExportXAnim(filePath):
 			f.write("\nPART %i\nNUMTRACKS 0\n" % i)
 	
 	f.close()
-	ProgressBarStep()
+
 	cmds.refresh()
 
 	if QueryToggableOption('E2B'):
@@ -1593,9 +1627,6 @@ def ExportXCam(filePath):
 	cameras = GetCameraList()
 	if len(cameras) == 0:
 		return "Error: No cameras selected for export"
-#	if len(cameras) > 128:
-#		print "Warning: More than 128 cameras have been selected. The animation might not work in WaW"
-	
 	# Get settings
 	frameStart = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FrameStartField", query=True, value=True)
 	frameEnd = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FrameEndField", query=True, value=True)
@@ -1771,7 +1802,7 @@ def CreateNewGunsleeveMayaFile(required_parameter):
 	# Export
 	if cmds.control("w"+OBJECT_NAMES['progress'][0], exists=True):
 		cmds.deleteUI("w"+OBJECT_NAMES['progress'][0])
-	progressWindow = cmds.window("w"+OBJECT_NAMES['progress'][0], title=OBJECT_NAMES['progress'][1], width=302, height=22)
+	progressWindow = cmds.window("w"+OBJECT_NAMES['progress'][0], title=OBJECT_NAMES['progress'][1], width=302, height=22, sizable=False)
 	cmds.columnLayout()
 	progressControl = cmds.progressBar(OBJECT_NAMES['progress'][0], width=300)
 	cmds.showWindow(progressWindow)
@@ -2014,6 +2045,7 @@ def CreateXAnimWindow():
 	noteList = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", allowMultiSelection=False, selectCommand=XAnimWindow_SelectNote, annotation="List of notes in the notetrack")
 	addNoteButton = cmds.button(label="Add Note", width=75, command=XAnimWindow_AddNote, annotation="Add a note to the notetrack")
 	ReadNotesButton = cmds.button(label="Grab Notes", width=75, command=ReadXanimNotes, annotation="Grab Notes from Notetrack in Outliner")
+	ClearNotes = cmds.button(label="Clear Notes", width=75, command=ClearxAnimNotes, annotation="Clear ALL notetracks.")
 	RenameNoteTrack = cmds.button(label="Rename Note", command=RenameXanimNotes, annotation="Rename the currently selected note.")
 	removeNoteButton = cmds.button(label="Remove Note", command=XAnimWindow_RemoveNote, annotation="Remove the currently selected note from the notetrack")
 	noteFrameLabel = cmds.text(label="Frame:", annotation="The frame the currently selected note is applied to")
@@ -2045,6 +2077,7 @@ def CreateXAnimWindow():
 					(addNoteButton, 'right', 10),
 					(ReadNotesButton, 'right', 10),
 					(RenameNoteTrack, 'right', 10),
+					(ClearNotes, 'right', 10),
 					(removeNoteButton, 'right', 10),
 					(noteFrameField, 'right', 10),
 					(separator2, 'left', 0), (separator2, 'right', 0),
@@ -2073,7 +2106,8 @@ def CreateXAnimWindow():
 						(addNoteButton, 'top', 5, notetracksLabel),
 						(ReadNotesButton, 'top', 5, addNoteButton),
 						(RenameNoteTrack, 'top', 5, ReadNotesButton),
-						(removeNoteButton, 'top', 5, RenameNoteTrack),
+						(ClearNotes, 'top', 5, RenameNoteTrack),
+						(removeNoteButton, 'top', 5, ClearNotes),
 						(noteFrameField, 'top', 5, removeNoteButton),
 						(noteFrameLabel, 'top', 8, removeNoteButton), (noteFrameLabel, 'right', 4, noteFrameField),
 						(separator2, 'bottom', 5, fileBrowserButton),
@@ -2222,6 +2256,20 @@ def XAnimWindow_RemoveNote(required_parameter):
 		noteList = ",".join(notes)
 		cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
 		XAnimWindow_SelectNote()
+
+def ClearxAnimNotes(required_parameter):
+	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
+	notes = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", query=True, allItems=True)
+	if notes is None:
+		return
+	for note in notes:
+		cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, removeItem=note)
+	noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
+	notetracks = noteList.split(",")
+	del notetracks
+	noteList = ""
+	cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+	XAnimWindow_SelectNote()
 		
 def XAnimWindow_UpdateNoteFrame(newFrame):
 	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
@@ -2232,7 +2280,7 @@ def XAnimWindow_UpdateNoteFrame(newFrame):
 		notes = noteList.split(",")
 		parts = notes[currentIndex-1].split(":")
 		if len(parts) < 2:
-			error("Error parsing notetrack string (A) at %i: %s" % (currentIndex, noteList))
+			parts("Error parsing notetrack string (A) at %i: %s" % (currentIndex, noteList))
 		notes[currentIndex-1] = "%s:%i" % (parts[0], newFrame)
 		noteList = ",".join(notes)
 		cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
@@ -2753,7 +2801,7 @@ def GeneralWindow_ExportSelected(windowID, exportingMultiple):
 	# Progress bar
 	if cmds.control("w"+OBJECT_NAMES['progress'][0], exists=True):
 		cmds.deleteUI("w"+OBJECT_NAMES['progress'][0])
-	progressWindow = cmds.window("w"+OBJECT_NAMES['progress'][0], title=OBJECT_NAMES['progress'][1], width=302, height=22)
+	progressWindow = cmds.window("w"+OBJECT_NAMES['progress'][0], title=OBJECT_NAMES['progress'][1], width=302, height=22, sizeable=False)
 	cmds.columnLayout()
 	progressControl = cmds.progressBar(OBJECT_NAMES['progress'][0], width=300)
 	cmds.showWindow(progressWindow)
@@ -3032,8 +3080,16 @@ def RunExport2Bin(file):
 	p = GetExport2Bin()
 
 	directory = os.path.dirname(os.path.realpath(file))
+	
 
-	p = subprocess.Popen([p, "*"], cwd=directory) # WORKS
+	if os.path.splitext(os.path.basename(p))[0] == "export2bin":
+		p = subprocess.Popen([p, "*"], cwd=directory)
+	elif os.path.splitext(os.path.basename(p))[0] == "exportx":
+		p = subprocess.Popen([p, "-f %s" % file])
+
+	
+
+	 # WORKS
 #	p.replace("/","\\")
 #	file.replace("/","\\")
 	#os.system('"' + p.replace("/","\\") + '" "' + file.replace("/","\\") + '"') # DOESNT WORK
@@ -3167,7 +3223,7 @@ def ForceOption(name, yesno):
 #   Aidan - teaching me how to make plugins like this :) #
 ##########################################################
 
-def GenerateCamAnim():
+def GenerateCamAnim(reqarg=""):
 	useDefMesh = False
 	if (cmds.objExists(getObjectByAlias("camera")) == False):
 		print "Camera doesn't exist"
@@ -3208,7 +3264,7 @@ def GenerateCamAnim():
 		cmds.progressWindow(edit=True,step=1)
 	cmds.progressWindow(edit=True,endProgress=True)
 
-def RemoveCameraKeys():
+def RemoveCameraKeys(reqarg=""):
 	if (cmds.objExists(getObjectByAlias("camera")) == False):
 		print "ERROR: Camera doesn't exist"
 		return
@@ -3227,7 +3283,7 @@ def RemoveCameraKeys():
 	# cmds.rotate(GunRot[0], GunRot[1], GunRot[2], rotateXYZ=True)
 	cmds.cutKey(clear=True,time=(animStart,animEnd+1))
 
-def RemoveCameraAnimData():
+def RemoveCameraAnimData(reqarg=""):
 	if (cmds.objExists(getObjectByAlias("camera")) == False):
 		print "ERROR: Camera doesn't exist"
 		return
@@ -3290,7 +3346,6 @@ def QueryToggableOption(name=""):
 			return
 
 	return reg.QueryValueEx(storageKey, "Setting_%s" % name)[0]
-
 
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------ Init ------------------------------------------------------------------------------
@@ -3365,8 +3420,8 @@ def CreateMenu():
 	cmds.menuItem(label="Settings", subMenu=True)
 	cmds.menuItem(label="Set Root Folder",  command="CoDMayaTools.SetRootFolder(None, 'CoD5')")
 	cmds.menuItem(divider=True)
-	cmds.menuItem("E2B", label='Use Export2Bin', checkBox=QueryToggableOption('E2B'), command="CoDMayaTools.SetToggableOption('E2B')" )
-	cmds.menuItem(label="Set Path to Export2Bin", command="CoDMayaTools.SetExport2Bin()")
+	cmds.menuItem("E2B", label='Use ExportX', checkBox=QueryToggableOption('E2B'), command="CoDMayaTools.SetToggableOption('E2B')" )
+	cmds.menuItem(label="Set Path to ExportX", command="CoDMayaTools.SetExport2Bin()")
 	cmds.menuItem(divider=True)
 	cmds.menuItem("AutomaticRename", label='Automatically rename joints (J_GUN, etc.)', checkBox=QueryToggableOption('AutomaticRename'), command="CoDMayaTools.SetToggableOption('AutomaticRename')" )
 	cmds.menuItem(divider=True)
