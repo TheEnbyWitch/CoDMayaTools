@@ -2061,7 +2061,6 @@ def CreateXAnimWindow():
 	
 	exportMultipleSlotsButton = cmds.button(label="Export Multiple Slots", command="CoDMayaTools.GeneralWindow_ExportMultiple('xanim')", annotation="Automatically export multiple slots at once, using each slot's saved selection")
 	exportInMultiExportCheckbox = cmds.checkBox(OBJECT_NAMES['xanim'][0]+"_UseInMultiExportCheckBox", label="Use current slot for Export Multiple", changeCommand="CoDMayaTools.GeneralWindow_ExportInMultiExport('xanim')", annotation="Check this make the 'Export Multiple Slots' button export this slot")
-	IgnoreUslessNotes = cmds.checkBox("CoDMAYA_IgnoreUslessNotes", label="Ignore Useless Notes like reload_large, etc.", annotation="Check this if you want to ignre notes like reload_large, etc.", value=True)
 	ReverseAnimation = cmds.checkBox("CoDMAYA_ReverseAnim", label="Export Animation Reversed", annotation="Check this if you want to export the anim. backwards. Usefule for reversing to make opposite sprints, etc.", value=False)
 	# Setup form
 	cmds.formLayout(form, edit=True,
@@ -2072,7 +2071,6 @@ def CreateXAnimWindow():
 					(qualityLabel, 'left', 10),
 					(notetracksLabel, 'left', 10),
 					(noteList, 'left', 10),
-					(IgnoreUslessNotes, 'left', 10),
 					(ReverseAnimation, 'left', 10),
 					(addNoteButton, 'right', 10),
 					(ReadNotesButton, 'right', 10),
@@ -2101,8 +2099,7 @@ def CreateXAnimWindow():
 						(qualityField, 'top', 5, fpsField), (qualityField, 'left', 21, qualityLabel),
 						(notetracksLabel, 'top', 5, qualityLabel),
 						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 60, separator2),
-						(IgnoreUslessNotes, 'top', 10, noteList), (IgnoreUslessNotes, 'right', 10, removeNoteButton),
-						(ReverseAnimation, 'top', 10, IgnoreUslessNotes), (ReverseAnimation, 'right', 10, removeNoteButton),
+						(ReverseAnimation, 'top', 10, noteList), (ReverseAnimation, 'right', 10, removeNoteButton),
 						(addNoteButton, 'top', 5, notetracksLabel),
 						(ReadNotesButton, 'top', 5, addNoteButton),
 						(RenameNoteTrack, 'top', 5, ReadNotesButton),
@@ -2413,7 +2410,7 @@ def CreateXCamWindow():
 	noteFrameLabel = cmds.text(label="Frame:", annotation="The frame the currently selected note is applied to")
 	noteFrameField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_NoteFrameField", changeCommand=XCamWindow_UpdateNoteFrame, height=21, width=30, minValue=0, annotation="The frame the currently selected note is applied to")
 	GrabFrames = cmds.button(label="Grab Frames", width=75, command=XCamWindow_SetFrames, annotation="Get frame end and start from scene.")
-	
+	ClearNotes = cmds.button(label="Clear Notes", width=75, command=ClearxCAMNotes, annotation="Clear ALL notetracks.")
 	saveToLabel = cmds.text(label="Save to:", annotation="This is where .xcam_export is saved to")
 	saveToField = cmds.textField(OBJECT_NAMES['xcam'][0]+"_SaveToField", height=21, changeCommand="CoDMayaTools.GeneralWindow_SaveToField('xcam')", annotation="This is where .xcam_export is saved to")
 	fileBrowserButton = cmds.button(label="...", height=21, command="CoDMayaTools.GeneralWindow_FileBrowser('xcam', \"XCam Intermediate File (*.xcam_export)\")", annotation="Open a file browser dialog")
@@ -2424,7 +2421,6 @@ def CreateXCamWindow():
 	
 	exportMultipleSlotsButton = cmds.button(label="Export Multiple Slots", command="CoDMayaTools.GeneralWindow_ExportMultiple('xcam')", annotation="Automatically export multiple slots at once, using each slot's saved selection")
 	exportInMultiExportCheckbox = cmds.checkBox(OBJECT_NAMES['xcam'][0]+"_UseInMultiExportCheckBox", label="Use current slot for Export Multiple", changeCommand="CoDMayaTools.GeneralWindow_ExportInMultiExport('xcam')", annotation="Check this make the 'Export Multiple Slots' button export this slot")
-	IgnoreUslessNotes = cmds.checkBox("CoDMAYA_IgnoreUslessNotes", label="Ignore Useless Notes like reload_large, etc.", annotation="Check this if you want to ignre notes like reload_large, etc.", value=True)
 	#ReverseAnimation = cmds.checkBox("CoDMAYA_ReverseAnim", label="Export Animation Reversed", annotation="Check this if you want to export the anim. backwards. Usefule for reversing to make opposite sprints, etc.", value=False)
 	# Setup form
 	cmds.formLayout(form, edit=True,
@@ -2435,11 +2431,11 @@ def CreateXCamWindow():
 					#(qualityLabel, 'left', 10),
 					(notetracksLabel, 'left', 10),
 					(noteList, 'left', 10),
-					(IgnoreUslessNotes, 'left', 10),
 					#(ReverseAnimation, 'left', 10),
 					(addNoteButton, 'right', 10),
 					(ReadNotesButton, 'right', 10),
 					(RenameNoteTrack, 'right', 10),
+					(ClearNotes, 'right', 10),
 					(removeNoteButton, 'right', 10),
 					(noteFrameField, 'right', 10),
 					(separator2, 'left', 0), (separator2, 'right', 0),
@@ -2461,14 +2457,14 @@ def CreateXCamWindow():
 						(fpsField, 'top', 5, framesStartField), (fpsField, 'left', 21, fpsLabel),
 						#(qualityLabel, 'top', 8, fpsField),
 						#(qualityField, 'top', 5, fpsField), (qualityField, 'left', 21, qualityLabel),
-						(notetracksLabel, 'top', 5, fpsLabel),
-						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 35, separator2),
-						(IgnoreUslessNotes, 'top', 10, noteList), (IgnoreUslessNotes, 'right', 10, removeNoteButton),
-						#(ReverseAnimation, 'top', 10, IgnoreUslessNotes), (ReverseAnimation, 'right', 10, removeNoteButton),
+						(notetracksLabel, 'top', 5, fpsField),
+						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 60, separator2),
+						#(ReverseAnimation, 'top', 10, noteList), (ReverseAnimation, 'right', 10, removeNoteButton),
 						(addNoteButton, 'top', 5, notetracksLabel),
 						(ReadNotesButton, 'top', 5, addNoteButton),
 						(RenameNoteTrack, 'top', 5, ReadNotesButton),
-						(removeNoteButton, 'top', 5, RenameNoteTrack),
+						(ClearNotes, 'top', 5, RenameNoteTrack),
+						(removeNoteButton, 'top', 5, ClearNotes),
 						(noteFrameField, 'top', 5, removeNoteButton),
 						(noteFrameLabel, 'top', 8, removeNoteButton), (noteFrameLabel, 'right', 4, noteFrameField),
 						(separator2, 'bottom', 5, fileBrowserButton),
@@ -2481,6 +2477,19 @@ def CreateXCamWindow():
 						(separator3, 'bottom', 5, exportMultipleSlotsButton)
 						])
 
+def ClearxCAMNotes(required_parameter):
+	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
+	notes = cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", query=True, allItems=True)
+	if notes is None:
+		return
+	for note in notes:
+		cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, removeItem=note)
+	noteList = cmds.getAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex)) or ""
+	notetracks = noteList.split(",")
+	del notetracks
+	noteList = ""
+	cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+	XAnimWindow_SelectNote()
 
 def XCamWindow_SetFrames(required_parameter):
     start = cmds.playbackOptions(minTime=True, query=True)
