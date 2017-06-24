@@ -8,7 +8,7 @@
 
 
 ## Table of contents
-- [Installation](#Installation)
+- [Installation](##Installation)
 
 ## Installation
 1) Download the [repository](https://github.com/Ray1235/CoDMayaTools/archive/master.zip) or just the [CoDMayaTools.py](https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/CoDMayaTools.py) file (right click & save). You'll only need that single file.
