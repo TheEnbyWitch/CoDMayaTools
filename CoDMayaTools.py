@@ -982,6 +982,7 @@ def ExportXModel(filePath):
 #	if len(joints) > 128:
 #		return "Error: More than 128 joints"
 	shapes = GetShapes(joints[0])
+	
 	if type(shapes) == str:
 		return shapes
 	
@@ -1405,13 +1406,13 @@ def GetShapes(joints):
 		
 	# Error messages
 	if len(meshes) == 0:
-		return "No meshes selected to export."
+		print "No meshes selected to export."
 	if len(verts) == 0:
-		return "No vertices found in selected meshes."
+		print "No vertices found in selected meshes."
 	if len(tris) == 0:
-		return "No faces found in selected meshes."
+		print "No faces found in selected meshes."
 	if len(materials) == 0:
-		return "No materials found on the selected meshes."
+		print "No materials found on the selected meshes."
 		
 	# Done!
 	return {"meshes": meshes, "verts": verts, "faces": tris, "materials": materials}
