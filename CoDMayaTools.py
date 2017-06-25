@@ -2181,17 +2181,6 @@ def ReadXanimNotes(required_parameter):
 			for NoteTrack in notes: # Go through each one.
 				try:
 					for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
-						IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
-											NoteTrack == "reload_large" 
-										 or NoteTrack == "reload_small" 
-										 or NoteTrack == "reload_medium"
-										 or NoteTrack == "clip_out"
-										 or NoteTrack == "clip_in"
-										 or NoteTrack == "rechamber_release"
-										 or NoteTrack == "rechamber_pull_back"
-										)
-						if cmds.checkBox("CoDMAYA_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
-							continue
 						if NoteTrack == "end" or NoteTrack == "loop_end":
 							continue
 						noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
@@ -2556,18 +2545,7 @@ def ReadXcamNotes(required_parameter):
 			for NoteTrack in notes: # Go through each one.
 				try:
 					for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
-						IsUneededNote = ( # If you find a Note that is not needed in WaW and you want to remove it from further anims add it here:
-											NoteTrack == "reload_large" 
-										 or NoteTrack == "reload_small" 
-										 or NoteTrack == "reload_medium"
-										 or NoteTrack == "clip_out"
-										 or NoteTrack == "clip_in"
-										 or NoteTrack == "rechamber_release"
-										 or NoteTrack == "rechamber_pull_back"
-										)
-						if cmds.checkBox("CoDMAYA_IgnoreUslessNotes", query=True, value=True) and IsUneededNote:
-							continue
-						if NoteTrack == "end":
+						if NoteTrack == "end" or NoteTrack == "loop_end":
 							continue
 						noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
 						cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
