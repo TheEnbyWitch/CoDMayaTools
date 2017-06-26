@@ -41,7 +41,7 @@ python("import CoDMayaTools");
 
 4) Save and close the file and launch Maya
 
-5) First-time config will occur. The plugin will ask you for your game's root directory and if you'll be using Export2Bin.
+5) First-time config will occur. The plugin will ask you for your game's root directory and if you'll be using Export2Bin/ExportX.
 
 6) You're all set! Be sure to visit this repo often for updates!
 
@@ -53,7 +53,7 @@ To export models to Call of Duty:
 
 1) Set the file path in the export window for where you want the model to be saved to.
 
-2) Select Meshes/Joints (At least on mesh or joint must be selected.
+2) Select Meshes/Joints (At least one mesh or joint must be selected.)
 
 3) Click "Export Selected".
 
@@ -66,26 +66,27 @@ If you have ExportX/Export2Bin's directory set and enabled, then it will be conv
 
 To export animations to Call of Duty:
 
-1) Set the file path in the export window for where you want the model to be saved to.
+1) Set the file path in the export window for where you want the animation to be saved to.
 
-2) Select Joints to export. (At least on mesh or joint must be selected.
+2) Select Joints to export. (At least one joint must be selected)
 
 3) Click "Export Selected".
 
 To add notetracks you simply click "Add Note" and enter the name of the notetrack, CoD Maya Tools will automaticly set the frame of the notetrack to the selected frame in the timeline, however you can edit at any time in the export window.
 
-If you have import a SEAnim or like with notetracks, then you can click "Grab Notes" and it will automatically grab the notes.
+If you have imported a SEAnim or alike with notetracks, then you can click "Grab Notes" and it will automatically grab the notes.
 
 To export an animation reveresed, simply select the option to export the anim reveresed. 
 
 If you have ExportX/Export2Bin's directory set and enabled, then it will be converted to XANIM_BIN automatically for use in Black Ops 3.
 
 ## Exporting XCAMS
+
 To export XCAMS to Call of Duty:
 
-1) Set the file path in the export window for where you want the model to be saved to.
+1) Set the file path in the export window for where you want the XCAM to be saved to.
 
-2) Select cameras to export. (At least on mesh or joint must be selected.
+2) Select cameras to export.
 
 3) Click "Export Selected".
 
@@ -93,7 +94,7 @@ To add notetracks you simply click "Add Note" and enter the name of the notetrac
 
 If you have import a SEAnim or like with notetracks, then you can click "Grab Notes" and it will automatically grab the notes.
 
-To export an animation reveresed, simply select the option to export the anim reveresed. 
+To export an XCAM reveresed, simply select the option to export the XCAM reveresed. 
 
 ## Ray's Anim Toolkit
 
@@ -109,9 +110,9 @@ To use Ray's Anim Toolkit:
 
 ## Cosmetic Bones:
 
-In Black Ops 3 we have now have "cosmetic bones", these are usually bones that define face features, or small cosmetic features on the model. If you're porting from Black Ops 3, cosmetic joints are usually obvious, as they are ton of joints with no children parented to 1 joint, for character models for example, this is the joint "head".
+In Black Ops 3 we have now have "cosmetic bones", these are usually bones that define face features or small cosmetic features on the model. If you're porting from Black Ops 3, cosmetic joints are usually obvious, as they are a large number of joints with no children parented to 1 joint, for character models for example, this is the joint "head".
 
-All cosmetic bones share the same parent, and thus it was easier to mark 1 joint as the parent and everything under that joint be cosmetic, to do this:
+All cosmetic bones share the same parent, and thus it is easier to mark 1 joint as the parent and everything under that joint be cosmetic, to do this:
 
 1) Select the parent of the cosmetic bones.
 
@@ -121,6 +122,6 @@ All cosmetic bones share the same parent, and thus it was easier to mark 1 joint
 
 Cosmetic Bones cannot have children and there can only be 1 cosmetic parent.
 
-# For cosmetic models they MUST be converted using ExportX (which is recommended over Export2Bin), to do download ExportX, click here:
+### For cosmetic models they MUST be converted using ExportX (which is recommended over Export2Bin), to do download ExportX, click here:
 
 [ExportX](http://aviacreations.com/wraith/#utilities-view)
