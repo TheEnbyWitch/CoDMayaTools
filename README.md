@@ -123,6 +123,6 @@ All cosmetic bones share the same parent, and thus it is easier to mark 1 joint 
 
 Cosmetic Bones cannot have children and there can only be 1 cosmetic parent.
 
-### For cosmetic models they MUST be converted using ExportX (which is recommended over Export2Bin), to do download ExportX, click here:
+### For cosmetic models they MUST be converted using ExportX (which is recommended over Export2Bin), to download ExportX, click here:
 
 [ExportX](http://aviacreations.com/wraith/#utilities-view)
