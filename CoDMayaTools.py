@@ -14,60 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # -----------------------------------------------------------------------------------------
-# VERSION INFO
-# VERSION 1
-#	+ Original - XModel Exporter, XAnim Exporter, and ViewModel tools
-# VERSION 1.1
-#	+ Added feature to switch the gun in a weapon rig file
-#	* Fixed trying to write to the export file before it was created
-#	* Changed the "No joints selected; exporting with a default TAG_ORIGIN." warning to not create a warning dialog after export
-#	* Other small random fixes
-# VERSION 1.2
-#	+ Added button to export multiple models/animations at once
-#	* Moved some of the user-changeable variables in the script to the top of the file in the CUSTOMIZATION section
-# VERSION 1.3
-#	* Fixed excessive TRI_VERT_RATIO error (this can still happen if something is wrong with your model, but this update should help)
-# VERSION 1.4
-#	* Changed new version message to open website forum topic instead of message box
-#	* Fixed models without skins exporting in Object space instead of World space
-# VERSION 1.5
-#	* Organized code a bit
-#	* Renamed project to "CoDMayaTools" (from "CoDExportTools"), as it now does both importing and exporting
-#	* Fixed material/object names exporting with : in them (namespace markers)
-#	+ Added CoD5 XModel importing
-#	+ Auto updating
-#	+ IWI to DDS converter
-# VERSION 1.5.1
-#	+ Added CoD4 XModel importing
-#	+ Automatically exports black vertices as white (can disable this in the customization section at the top of the script file)
-#	* Bug fixes
-# VERSION 2.0
-# 	+ Added an option for exporting anims with better quality and reduced jitter (only applies to custom made anims)
-#	+ Support for Export2Bin
-#	+ Supports reading notetracks from old CoD Exporter for Maya 8.5 and from Wraith exports
-#   + Merged with Ray's camera animation toolkit
-# VERSION 2.1
-#	+ Minor fix in RCAT which caused an error in Maya 2016
-# VERSION 2.2
-# 	+ Export2Bin support is fully finished
-# VERSION 2.3
-#	* Fixed Reg error/s.
-#	* (Hopyfully) Fixed Export2Bin and should now work and convert in same dir.
-# VERSION 2.4
-#   * Added basic XCAM_EXPORT support
-#	* Added support for CoD1 (untested)
-#	* Added support for BO3 xmodel_export keywords
-#	* Added an option to automatically rename tag_weapon and j_gun joints
-# VERSION 2.5
-#   * Fixed progression bars on xanim and xmodel exports.
-#	* Fixed auto-rename to only rename under certain conditions (i.e. rename only tag_weapon to tag_weapon_right if it's a child of tag_torso)
-#	+ Added support for cosmetic bones.
-#	+ Added clear notes button to remove all notes in xanim window.
-#	+ Added support for ExportX, Export2Bin still works. (ExportX is required for cosmetic bones).
-#	+ Armature Only models are now allowed for animation models.
-#	- Removed Ignore Useless notes, it's hard to determine a "useless note", if you don't want notes like "reload_large" then remove them manually.
-#	- Removed Bo3 Mode, if you have models with greater than 65k verts, use ExportX.
-#	
+#
+#	Change log now available on Github!
 #
 
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -103,9 +51,10 @@ import zipfile
 import re
 from subprocess import Popen, PIPE, STDOUT
 
+
 WarningsDuringExport = 0 # Number of warnings shown during current export
 CM_TO_INCH = 0.3937007874015748031496062992126 # 1cm = 50/127in
-FILE_VERSION = 2.0
+FILE_VERSION = 2.52
 VERSION_CHECK_URL = "https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/version"
 GLOBAL_STORAGE_REG_KEY = (reg.HKEY_CURRENT_USER, "Software\\CoDMayaTools") # Registry path for global data storage
 #				name	 : 		control code name,				control friendly name,	data storage node name,	refresh function,		export function
@@ -115,7 +64,11 @@ OBJECT_NAMES = 	{'menu'  : 		["CoDMayaToolsMenu",    		"Call of Duty Tools", 	No
 				 'xanim' :		["CoDMayaXAnimExportWindow",  	"Export XAnim",			"XAnimExporterInfo",	"RefreshXAnimWindow",	"ExportXAnim"],
 				 'xcam' :		["CoDMayaXCamExportWindow",  	"Export XCam",			"XCamExporterInfo",		"RefreshXCamWindow",	"ExportXCam"]}
 
+WORKING_DIR = os.path.dirname(os.path.realpath(__file__))
+
 currentGame = "none"
+# Format (JOINT, PARENTNAME) : NEWNAME
+# Leave parent to None to rename regardless.
 RENAME_DICTONARY = {("tag_weapon", "tag_torso") : "tag_weapon_right",
 					("tag_weapon1", "tag_torso") : "tag_weapon_left",
 					("j_gun", None) : "tag_weapon",
@@ -123,6 +76,78 @@ RENAME_DICTONARY = {("tag_weapon", "tag_torso") : "tag_weapon_right",
 					("tag_flash1", "j_gun1") : "tag_flash_le",
 					("tag_brass1", None) : "tag_brass_le",
 }
+
+# ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------ Init ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+def CreateMenu():
+	cmds.setParent(mel.eval("$temp1=$gMainWindow"))
+	
+	if cmds.control(OBJECT_NAMES['menu'][0], exists=True):
+		cmds.deleteUI(OBJECT_NAMES['menu'][0], menu=True)
+	
+	menu = cmds.menu(OBJECT_NAMES['menu'][0], label=OBJECT_NAMES["menu"][1], tearOff=True)
+	
+	# Export tools
+	cmds.menuItem(label=OBJECT_NAMES['xmodel'][1]+"...", command="CoDMayaTools.ShowWindow('xmodel')")
+	cmds.menuItem(label=OBJECT_NAMES['xanim'][1]+"...", command="CoDMayaTools.ShowWindow('xanim')")
+	cmds.menuItem(label=OBJECT_NAMES['xcam'][1]+"...", command="CoDMayaTools.ShowWindow('xcam')")
+	
+	# Viewmodel controls submenu
+	cmds.menuItem(label="ViewModel Tools", subMenu=True)
+	cmds.menuItem(label="Create New Gunsleeve Maya File", command=CreateNewGunsleeveMayaFile)
+	cmds.menuItem(label="Create New ViewModel Rig File", command=CreateNewViewmodelRigFile)
+	cmds.menuItem(label="Switch Gun in Current Rig File", command=SwitchGunInCurrentRigFile)
+	cmds.setParent(menu, menu=True)
+	
+	# Import tools
+	cmds.menuItem(divider=True)
+	cmds.menuItem(label="Import XModel...", subMenu=True)
+	cmds.menuItem(label="...from CoD5", command="CoDMayaTools.ImportXModel('CoD5')")
+	cmds.menuItem(label="...from CoD4", command="CoDMayaTools.ImportXModel('CoD4')")
+	cmds.setParent(menu, menu=True)
+	
+	# Ray's Animation Toolkit
+	cmds.menuItem(divider=True)
+	cmds.menuItem(label="Ray's Camera Animation Toolkit", subMenu=True)
+	cmds.menuItem(label="Mark as camera", command="CoDMayaTools.setObjectAlias('camera')")
+	cmds.menuItem(label="Mark as weapon", command="CoDMayaTools.setObjectAlias('weapon')")
+	cmds.menuItem(divider=True)
+	cmds.menuItem(label="Generate camera animation", command="CoDMayaTools.GenerateCamAnim()")
+	cmds.menuItem(divider=True)
+	cmds.menuItem(label="Remove camera animation in current range", command=RemoveCameraKeys)
+	cmds.menuItem(label="Reset camera", command=RemoveCameraAnimData)
+	cmds.setParent(menu, menu=True)
+	
+	# IWIxDDS
+	cmds.menuItem(divider=True)
+	cmds.menuItem(label="Convert IWI to DDS", command="CoDMayaTools.IWIToDDSUser()")
+	
+	# Root folder
+	cmds.menuItem(divider=True)
+	cmds.menuItem(label="Set Root Folder",  command="CoDMayaTools.SetRootFolder(None, 'CoD5')")
+
+	# Settings
+	cmds.menuItem(divider=True)
+	cmds.menuItem(label="Settings", subMenu=True)
+	cmds.menuItem(label="Set Root Folder",  command="CoDMayaTools.SetRootFolder(None, 'CoD5')")
+	cmds.menuItem(divider=True)
+	cmds.menuItem("E2B", label='Use ExportX', checkBox=QueryToggableOption('E2B'), command="CoDMayaTools.SetToggableOption('E2B')" )
+	cmds.menuItem(label="Set Path to ExportX", command="CoDMayaTools.SetExport2Bin()")
+	cmds.menuItem(divider=True)
+	cmds.menuItem("AutomaticRename", label='Automatically rename joints (J_GUN, etc.)', checkBox=QueryToggableOption('AutomaticRename'), command="CoDMayaTools.SetToggableOption('AutomaticRename')" )
+	cmds.menuItem(divider=True)
+	cmds.menuItem("CoD1Mode", label='CoD1 Mode', checkBox=QueryToggableOption('CoD1Mode'), command="CoDMayaTools.SetToggableOption('CoD1Mode')" )
+	cmds.menuItem("AutoUpdate", label='Auto Updates', checkBox=QueryToggableOption('AutoUpdate'), command="CoDMayaTools.SetToggableOption('AutoUpdate')" )
+	cmds.menuItem("PrintExport", label='Print xmodel_export information.', checkBox=QueryToggableOption('PrintExport'), command="CoDMayaTools.SetToggableOption('PrintExport')" )
+	cmds.setParent(menu, menu=True)
+	cmds.menuItem(divider=True)
+	# For easy script updating
+	cmds.menuItem(label="Reload Script", command="reload(CoDMayaTools)")
+	
+	# Tools Info
+	cmds.menuItem(label="About", command="CoDMayaTools.AboutWindow()")
+
 				 
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------- Import Common --------------------------------------------------------------------------
@@ -812,9 +837,13 @@ def GetJointList():
 				searchQueue.put((index, childNode, selectedObjects.hasItem(dagPath) and dagPath.hasFn(OpenMaya.MFn.kJoint)))
 
 	# Cosmetic bones must be at the end, so append them AFTER we've added other bones.
+
 	for joint in cosmetic_list:
 		joints.append(joint)
-	
+
+	LogExport("Exporting %i joints" % len(joints))
+	LogExport("Exporting %i cosmetics." % len(cosmetic_list))
+
 	return joints, cosmetic_list, cosmetic_id
 
 def GetCameraList():
@@ -1001,6 +1030,7 @@ def ExportXModel(filePath):
 		return "Unable to create file:\n\n%s" % value.strerror
 	
 	# Write header
+	LogExport("\n\nWriting header.\n")
 	f.write("// Export filename: '%s'\n" % os.path.normpath(filePath))
 	if cmds.file(query=True, exists=True):
 		f.write("// Source filename: '%s'\n" % os.path.normpath(os.path.abspath(cmds.file(query=True, sceneName=True))).encode('ascii', 'ignore')) # Ignore Ascii characters using .encode()
@@ -1010,12 +1040,16 @@ def ExportXModel(filePath):
 	f.write("MODEL\n")
 
 	if QueryToggableOption("CoD1Mode"):
+		LogExport("Exporing Version 5 File\n")
 		f.write("VERSION 5\n\n")
 	else:
+		LogExport("Exporing Version 6 File\n")
 		f.write("VERSION 6\n\n")
 	
 	# Write joints
+	LogExport("Writing %i joints.\n" % len(joints[0]))
 	if len(joints[0]) == 0:
+		LogExport("No joints selected; exporting with a default TAG_ORIGIN.\n")
 		print "No joints selected; exporting with a default TAG_ORIGIN."
 		f.write("NUMBONES 1\n")
 		f.write("BONE 0 -1 \"TAG_ORIGIN\"\n\n")
@@ -1027,18 +1061,24 @@ def ExportXModel(filePath):
 		f.write("Y 0.000000 1.000000 0.000000\n")
 		f.write("Z 0.000000 0.000000 1.000000\n")
 	else:
+		LogExport("Writing NUMBONES\n")
 		f.write("NUMBONES %i\n" % len(joints[0]))
 		if len(joints[1]) > 0:
+			LogExport("Writing NUMCOSMETICS\n")
 			# NUMCOSMETICS COUNT PARENTID
 			f.write("NUMCOSMETICS %i %i\n" % (len(joints[1]), joints[2]) )
+		LogExport("Writing Bone table.\n")
 		for i, joint in enumerate(joints[0]):
 			f.write("BONE %i %i \"%s\"\n" % (i, joint[0], joint[1]))
-		
+		LogExport("Writing Bone Information.\n")
 		for i, joint in enumerate(joints[0]):
 			f.write("\nBONE %i\n" % i)
 			WriteJointData(f, joint[2])
 
 	# Write verts
+	LogExport("Writing vert data.\n")
+	if len(shapes["verts"]) > 65536:
+		LogExport("> 65536 verts, use EXPORTX to convert to XMODEL_BIN, will not work in older games.\n")
 	f.write("\nNUMVERTS %i\n" % len(shapes["verts"]))
 	for i, vert in enumerate(shapes["verts"]):
 		f.write("VERT %i\n" % i)
@@ -1056,6 +1096,7 @@ def ExportXModel(filePath):
 		f.write("\n")
 	
 	# Write faces
+	LogExport("Writing face data.\n")
 	f.write("NUMFACES %i\n" % len(shapes["faces"]))
 	for j, face in enumerate(shapes["faces"]):
 		f.write("TRI %i %i 0 0\n" % (face[0], face[1]))
@@ -1068,11 +1109,13 @@ def ExportXModel(filePath):
 		f.write("\n")
 	
 	# Write objects
+	LogExport("Writing meshes/objects.\n")
 	f.write("NUMOBJECTS %i\n" % len(shapes["meshes"]))
 	for i, object in enumerate(shapes["meshes"]):
 		f.write("OBJECT %i \"%s\"\n" % (i, object.split(":")[-1]))
 	
 	# Write materials
+	LogExport("Writing materials.\n")
 	f.write("\nNUMMATERIALS %i\n" % len(shapes["materials"]))
 	for i, material in enumerate(shapes["materials"]):
 		if QueryToggableOption("CoD1Mode"):
@@ -1098,11 +1141,12 @@ def ExportXModel(filePath):
 	ProgressBarStep()
 	cmds.refresh()
 	if QueryToggableOption('E2B'):
+		LogExport("Converting to XMODEL_BIN\n")
 		try:
 			RunExport2Bin(filePath)
 		except:
 			MessageBox("The model exported successfully however Export2Bin failed to run, the model will need to be converted manually.\n\nPlease check your paths.")
-
+	LogExport("\nFile Exported, close window when ready.\n")
 def GetMaterialsFromMesh(mesh, dagPath):
 	textures = {}
 	
@@ -1184,12 +1228,10 @@ def GetNumInfo(selectedObjects):
 		selectedObjects.getDagPath(i, dagPath)
 		# Check it's a mesh.
 		if not dagPath.hasFn(OpenMaya.MFn.kMesh):
-			ProgressBarStep()
 			continue
 		dagPath.extendToShape()
 		# Check for duplicate.
 		if dagPath.partialPathName() in meshes:
-			ProgressBarStep()
 			continue
 		# Append.
 		meshes.append(dagPath.partialPathName())
@@ -1199,11 +1241,12 @@ def GetNumInfo(selectedObjects):
 		maxValue += OpenMaya.MItMeshPolygon(dagPath).count()
 
 	# Return value * 2 because we will loop over 2x for getting info and writing it to export.
-	return maxValue * 2 + 1
+	return maxValue * 2
 
 		
 	
 def GetShapes(joints):
+	LogExport("Beginning Export...\n")
 	# Vars
 	meshes = []
 	verts = []
@@ -1225,6 +1268,10 @@ def GetShapes(joints):
 
 	progressInfo = GetNumInfo(selectedObjects)
 
+	# - Log Export - 
+	LogExport("Exporting %i faces/meshes.\n" % (progressInfo / 2))
+	# - Log Export - 
+
 	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue = progressInfo)
 	
 	# Loop through all objects
@@ -1237,7 +1284,6 @@ def GetShapes(joints):
 		
 		# Ignore dag nodes that aren't shapes or shape transforms
 		if not dagPath.hasFn(OpenMaya.MFn.kMesh):
-			ProgressBarStep()
 			continue
 		
 		# Lower path to shape node
@@ -1246,7 +1292,6 @@ def GetShapes(joints):
 		
 		# Check for duplicates
 		if dagPath.partialPathName() in meshes:
-			ProgressBarStep()
 			continue
 		
 		# Add shape to list
@@ -1268,6 +1313,11 @@ def GetShapes(joints):
 		
 		# Loop through all vertices
 		vertIter = OpenMaya.MItMeshVertex(dagPath)
+		# - Log Export - 
+		LogExport("\nGrabbing mesh information from %s.\n" % dagPath.partialPathName())	
+		LogExport("Grabbing verts from %s\n" % dagPath.partialPathName())	
+		# - Log Export - 
+		vertGetTime = time.time()
 		while not vertIter.isDone():
 			if not hasSkin:
 				verts.append((vertIter.position(OpenMaya.MSpace.kWorld), []))
@@ -1285,6 +1335,8 @@ def GetShapes(joints):
 			
 			# Make sure the list of weight values and names match
 			if weightValues.length() != weightJoints.length():
+						# - Log Export - 
+				LogExport("Failed to retrieve vertex weight list on '%s.vtx[%d]'; using default joints.\n" % (dagPath.partialPathName(), vertIter.index()), True)	
 				PrintWarning("Failed to retrieve vertex weight list on '%s.vtx[%d]'; using default joints." % (dagPath.partialPathName(), vertIter.index()))
 			
 			# Remove weights of value 0 or weights from unexported joints
@@ -1295,7 +1347,8 @@ def GetShapes(joints):
 					continue
 				jointName = weightJoints[i].partialPathName()
 				if not jointName in jointDict:
-					PrintWarning("Unexported joint %s is influencing vertex '%s.vtx[%d]' by %f%%" % (("'%s'" % jointName).ljust(15), dagPath.partialPathName(), vertIter.index(), weightValues[i]*100))
+					LogExport("Unexported joint %s is influencing vertex '%s.vtx[%d]' by %f%%\n" % (("'%s'" % jointName).ljust(15), dagPath.partialPathName(), vertIter.index(), weightValues[i]*100), True)
+					PrintWarning("Unexported joint %s is influencing vertex '%s.vtx[%d]' by %f%%\n" % (("'%s'" % jointName).ljust(15), dagPath.partialPathName(), vertIter.index(), weightValues[i]*100))
 				else:
 					finalWeights.append([jointDict[jointName], weightValues[i]])
 					weightsSize += weightValues[i]
@@ -1314,7 +1367,9 @@ def GetShapes(joints):
 			# Next vert
 			ProgressBarStep()
 			vertIter.next()
-		
+		# - Log Export - 
+		LogExport("Grabbed %i verts from %s in %s seconds.\n" % (vertIter.count(), dagPath.partialPathName(), time.time() - vertGetTime))	
+		# - Log Export - 
 		# Get materials used by this mesh
 		meshMaterials = GetMaterialsFromMesh(mesh, dagPath)
 
@@ -1323,6 +1378,10 @@ def GetShapes(joints):
 		# Loop through all faces
 		polyIter = OpenMaya.MItMeshPolygon(dagPath)
 		currentObjectVertexOffset = 0
+		# - Log Export - 
+		LogExport("Grabbing faces from %s\n" % dagPath.partialPathName())	
+		faceGetTime = time.time()
+		# - Log Export - 
 		while not polyIter.isDone():
 			# Get this poly's material
 			polyMaterial = meshMaterials[polyIter.index()]
@@ -1398,11 +1457,13 @@ def GetShapes(joints):
 			# Next poly
 			ProgressBarStep()
 			polyIter.next()
+
+		# - Log Export - 
+		LogExport("Grabbed %i faces from %s in %s seconds.\n" % (polyIter.count(), dagPath.partialPathName(), time.time() - faceGetTime))	
+		# - Log Export - 
 		
 		# Update starting vertex index
 		currentStartingVertIndex = len(verts)
-		
-		ProgressBarStep()
 		
 	# Error messages
 	if len(meshes) == 0:
@@ -1462,7 +1523,7 @@ def ExportXAnim(filePath):
 		typex, value, traceback = sys.exc_info()
 		return "Unable to create files:\n\n%s" % value.strerror
 
-	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue=frameEnd)
+	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue=frameEnd - 1)
 	
 	# Write header
 	f.write("// Export filename: '%s'\n" % os.path.normpath(filePath))
@@ -2792,6 +2853,8 @@ def GeneralWindow_ExportSelected(windowID, exportingMultiple):
 	progressWindow = cmds.window("w"+OBJECT_NAMES['progress'][0], title=OBJECT_NAMES['progress'][1], width=302, height=22, sizeable=False)
 	cmds.columnLayout()
 	progressControl = cmds.progressBar(OBJECT_NAMES['progress'][0], width=300)
+	if QueryToggableOption("PrintExport") and windowID == "xmodel":
+		cmds.scrollField("ExportLog", editable=False, wordWrap=False, width = 300)
 	cmds.showWindow(progressWindow)
 	cmds.refresh() # Force the progress bar to be drawn
 	
@@ -2803,9 +2866,13 @@ def GeneralWindow_ExportSelected(windowID, exportingMultiple):
 		exec("response = %s(\"%s\")" % (OBJECT_NAMES[windowID][4], filePath))
 	except Exception as e:
 		response = "An unhandled error occurred during export:\n\n" + traceback.format_exc()
+
+	if windowID == "xanim":
+		cmds.deleteUI(progressWindow, window=True)
 	
 	# Delete progress bar
-	cmds.deleteUI(progressWindow, window=True)
+	if not QueryToggableOption("PrintExport") and windowID == "xmodel":
+		cmds.deleteUI(progressWindow, window=True)
 	
 	# Handle response
 	
@@ -2904,6 +2971,19 @@ def ShowWindow(windowID):
 
 def ProgressBarStep():
 	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, step=1)
+
+def LogExport(text, isWarning = False):
+	if QueryToggableOption("PrintExport"):
+		if isWarning:
+			global WarningsDuringExport
+			if WarningsDuringExport < MAX_WARNINGS_SHOWN:
+				cmds.scrollField("ExportLog", edit = True, insertText = text)
+				WarningsDuringExport += 1
+			elif WarningsDuringExport == MAX_WARNINGS_SHOWN:
+				cmds.scrollField("ExportLog", edit = True, insertText = "More warnings not shown because printing text is slow...\n")
+				WarningsDuringExport = MAX_WARNINGS_SHOWN+1		
+		else:
+			cmds.scrollField("ExportLog", edit = True, insertText = text)
 	
 def AboutWindow():
 	result = cmds.confirmDialog(message="Call of Duty Tools for Maya, created by Aidan Shafran (with assistance from The Internet).\nMaintained by Ray1235 (Maciej Zaremba) & Scobalula\n\nThis script is under the GNU General Public License. You may modify or redistribute this script, however it comes with no warranty. Go to http://www.gnu.org/licenses/ for more details.", button=['OK', 'Visit Forum Topic', 'CoD File Formats'], defaultButton='OK', title="About " + OBJECT_NAMES['menu'][1])
@@ -2916,11 +2996,10 @@ def LegacyWindow():
 	result = cmds.confirmDialog(message="""CoD1 mode exports models that are compatible with CoD1.
 When this mode is disabled, the plugin will export models that are compatible with CoD2 and newer.
 
-BO3 Mode is only supported in BO3, but it lets you have models with >65535 vertices.
 BO3 Mode overrides CoD1 mode if active.""", button=['OK'], defaultButton='OK', title="Legacy options")
 		
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# --------------------------------------------------------------------------- Versioning ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- Versioning (Deprecated) --------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def HasInternetAccess():
 	# http://stackoverflow.com/questions/3764291/checking-network-connection
@@ -3075,23 +3154,6 @@ def RunExport2Bin(file):
 	elif os.path.splitext(os.path.basename(p))[0] == "exportx":
 		p = subprocess.Popen([p, "-f %s" % file])
 
-	
-
-	 # WORKS
-#	p.replace("/","\\")
-#	file.replace("/","\\")
-	#os.system('"' + p.replace("/","\\") + '" "' + file.replace("/","\\") + '"') # DOESNT WORK
-#	cmd = ("\""+p.replace("/","\\") + "\" /single \"" + file.replace("/","\\") + "\"")# , "\"" + file.replace("/","\\") + "\""])
-#	p = Popen(cmd, shell=False, stdin=PIPE, stdout=PIPE, stderr=STDOUT)#, close_fds=True)
-#	output = p.stdout.read()
-#	bin_file = open("%s%s" % (os.path.splitext(file)[0], (os.path.splitext(file)[1]).replace("_export","_bin")), "w")
-#
-#	bin_file.write("%s" % output)
-#
-#	bin_file.close()
-	#args = [p.replace("/","\\"), file.replace("/","\\")]
-	#subprocess.popen(args)
-
 def SetExport2Bin():
 	export2binpath = cmds.fileDialog2(fileMode=1, dialogStyle=2)[0]
 	
@@ -3099,9 +3161,6 @@ def SetExport2Bin():
 	if not os.path.isfile(export2binpath):
 		MessageBox("Given path does not exist")
 		return ""
-	# cmds.promptDialog(title="Set Root Path", message=export2binpath)
-	# Set path
-	# , 0, reg.KEY_SET_VALUE)
 	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
 	reg.SetValueEx(storageKey, "Export2BinPath", 0, reg.REG_SZ, export2binpath)
 	reg.CloseKey(storageKey)
@@ -3200,6 +3259,18 @@ def ForceOption(name, yesno):
 	reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, yesno)
 	reg.CloseKey(storageKey)
 	CreateMenu()
+
+"""
+Check for updates using a seperate EXE.
+
+"""
+def CheckForUpdatesEXE():
+	if QueryToggableOption("AutoUpdate"):
+		p = ("%s -name %s -version %f -version_info_url %s" % (os.path.join(WORKING_DIR, "autoUpdate.exe"), "CoDMayaTools.py", FILE_VERSION, VERSION_CHECK_URL))
+		subprocess.Popen(p)
+	else:
+		return
+
 	
 #def SetGame(name):
 #	currentGame = name
@@ -3331,106 +3402,10 @@ def QueryToggableOption(name=""):
 		try:
 			reg.SetValueEx(storageKey, "Setting_%s" % name, 0, reg.REG_DWORD , 0 )
 		except:
-			return
+			return 1
 
 	return reg.QueryValueEx(storageKey, "Setting_%s" % name)[0]
 
-# ------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------ Init ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------------------------------------------------------------------------------------------
-def CreateMenu():
-	cmds.setParent(mel.eval("$temp1=$gMainWindow"))
-	
-	if cmds.control(OBJECT_NAMES['menu'][0], exists=True):
-		cmds.deleteUI(OBJECT_NAMES['menu'][0], menu=True)
-	
-	menu = cmds.menu(OBJECT_NAMES['menu'][0], label=OBJECT_NAMES["menu"][1], tearOff=True)
-	
-	# Export tools
-	cmds.menuItem(label=OBJECT_NAMES['xmodel'][1]+"...", command="CoDMayaTools.ShowWindow('xmodel')")
-	cmds.menuItem(label=OBJECT_NAMES['xanim'][1]+"...", command="CoDMayaTools.ShowWindow('xanim')")
-	cmds.menuItem(label=OBJECT_NAMES['xcam'][1]+"...", command="CoDMayaTools.ShowWindow('xcam')")
-	
-	# Viewmodel controls submenu
-	cmds.menuItem(label="ViewModel Tools", subMenu=True)
-	cmds.menuItem(label="Create New Gunsleeve Maya File", command=CreateNewGunsleeveMayaFile)
-	cmds.menuItem(label="Create New ViewModel Rig File", command=CreateNewViewmodelRigFile)
-	cmds.menuItem(label="Switch Gun in Current Rig File", command=SwitchGunInCurrentRigFile)
-#	AddToggleableOption("AutoRename","Automatically rename joints")
-	cmds.setParent(menu, menu=True)
-	
-	# Import tools
-	cmds.menuItem(divider=True)
-	cmds.menuItem(label="Import XModel...", subMenu=True)
-	cmds.menuItem(label="...from CoD5", command="CoDMayaTools.ImportXModel('CoD5')")
-	cmds.menuItem(label="...from CoD4", command="CoDMayaTools.ImportXModel('CoD4')")
-#	cmds.menuItem(label="...from FastFile", enable=False)
-	cmds.setParent(menu, menu=True)
-	
-#	cmds.menuItem(label="Import XAnim...", subMenu=True, enable=False)
-#	cmds.menuItem(label="...from CoD5", command="CoDMayaTools.ImportXAnim('CoD5')")
-#	cmds.menuItem(label="...from CoD4", enable=False)
-#	cmds.menuItem(label="...from FastFile", enable=False)
-#	cmds.setParent(menu, menu=True)
-	# Ray's Animation Toolkit
-	cmds.menuItem(divider=True)
-	cmds.menuItem(label="Ray's Camera Animation Toolkit", subMenu=True)
-#	cmds.menuItem(label="Camera animation", subMenu=True)
-	cmds.menuItem(label="Mark as camera", command="CoDMayaTools.setObjectAlias('camera')")
-	cmds.menuItem(label="Mark as weapon", command="CoDMayaTools.setObjectAlias('weapon')")
-	cmds.menuItem(divider=True)
-	cmds.menuItem(label="Generate camera animation", command="CoDMayaTools.GenerateCamAnim()")
-	cmds.menuItem(divider=True)
-	cmds.menuItem(label="Remove camera animation in current range", command=RemoveCameraKeys)
-	cmds.menuItem(label="Reset camera", command=RemoveCameraAnimData)
-	#cmds.setParent("raysToolkit", menu=True)
-	cmds.setParent(menu, menu=True)
-	
-	# IWIxDDS
-	cmds.menuItem(divider=True)
-	cmds.menuItem(label="Convert IWI to DDS", command="CoDMayaTools.IWIToDDSUser()")
-	
-	# Root folder
-	cmds.menuItem(divider=True)
-	cmds.menuItem(label="Set Root Folder",  command="CoDMayaTools.SetRootFolder(None, 'CoD5')")
-#	cmds.menuItem(label="Set CoD5 Root Folder", command="CoDMayaTools.SetRootFolder(None, 'CoD5')")
-#	cmds.menuItem(label="Set CoD4 Root Folder", command="CoDMayaTools.SetRootFolder(None, 'CoD4')")
-#	cmds.setParent(menu, menu=True)
-
-	# Select game
-	cmds.menuItem(divider=True)
-#	cmds.menuItem(label="Set Game", subMenu=True)
-#	cmds.menuItem(label="BO3", command="CoDMayaTools.SetGame('BO3')")
-#	cmds.menuItem(label="CoD5", command="CoDMayaTools.SetGame('CoD5')")
-#	cmds.menuItem(label="CoD4", command="CoDMayaTools.SetGame('CoD4')")
-#	cmds.setParent(menu, menu=True)
-
-	cmds.menuItem(label="Settings", subMenu=True)
-	cmds.menuItem(label="Set Root Folder",  command="CoDMayaTools.SetRootFolder(None, 'CoD5')")
-	cmds.menuItem(divider=True)
-	cmds.menuItem("E2B", label='Use ExportX', checkBox=QueryToggableOption('E2B'), command="CoDMayaTools.SetToggableOption('E2B')" )
-	cmds.menuItem(label="Set Path to ExportX", command="CoDMayaTools.SetExport2Bin()")
-	cmds.menuItem(divider=True)
-	cmds.menuItem("AutomaticRename", label='Automatically rename joints (J_GUN, etc.)', checkBox=QueryToggableOption('AutomaticRename'), command="CoDMayaTools.SetToggableOption('AutomaticRename')" )
-	cmds.menuItem(divider=True)
-	cmds.menuItem("BO3Mode", label='BO3 Mode', checkBox=QueryToggableOption('BO3Mode'), command="CoDMayaTools.SetToggableOption('BO3Mode')" )
-	cmds.menuItem("CoD1Mode", label='CoD1 Mode', checkBox=QueryToggableOption('CoD1Mode'), command="CoDMayaTools.SetToggableOption('CoD1Mode')" )
-	cmds.menuItem(label="What are those Legacy options?", command="CoDMayaTools.LegacyWindow()")
-	cmds.setParent(menu, menu=True)
-	cmds.menuItem(divider=True)
-	# For easy script updating
-	cmds.menuItem(label="Reload Script", command="reload(CoDMayaTools)")
-	
-	# Tools Info
-	cmds.menuItem(label="About", command="CoDMayaTools.AboutWindow()")
-
-	# Updates
-#	update = CheckForUpdates()
-#	if update:
-#		cmds.setParent(menu, menu=True)
-#		cmds.menuItem(divider=True)
-#		cmds.menuItem(label="A newer version (v%s) of CoD Maya Tools is available! (Click to automatically update)" % ('%f' % (update[0])).rstrip('0').rstrip('.'), command="CoDMayaTools.DownloadUpdate('%s')" % update[1])
-	
 # ---- Create windows ----
 try:
 	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
@@ -3444,13 +3419,21 @@ try:
 except WindowsError:
 	cmds.confirmDialog(message="It looks like this is your first time running CoD Maya Tools.\nYou will be asked to choose your game's root path.", button=['OK'], defaultButton='OK', title="First time configuration") #MessageBox("Please set your root path before starting to work with CoD Maya Tools")
 	SetRootFolder()
-	res = cmds.confirmDialog(message="Are you using Export2Bin? (only required for Black Ops 3)", button=['Yes', 'No'], defaultButton='No', title="First time configuration")
+	res = cmds.confirmDialog(message="Are you using Export2Bin/ExportX? (only required for Black Ops 3)", button=['Yes', 'No'], defaultButton='No', title="First time configuration")
 	if res == "Yes":
+		SetExport2Bin()
 		SetToggableOption(name="E2B", val=1)
 	else:
 		SetToggableOption(name="E2B", val=0)
+	res = cmds.confirmDialog(message="Enable Automatic Updates?", button=['Yes', 'No'], defaultButton='No', title="First time configuration")
+	if res == "Yes":
+		SetToggableOption(name="AutoUpdate", val=1)
+	else:
+		SetToggableOption(name="AutoUpdate", val=0)
 	cmds.confirmDialog(message="You're set! You can now export models and anims to any CoD!")
+	
 
+CheckForUpdatesEXE()
 CreateMenu()
 CreateXAnimWindow()
 CreateXModelWindow()
