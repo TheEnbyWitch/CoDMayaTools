@@ -24,9 +24,9 @@
 
 
 ## Installation
-1) Download the [repository](https://github.com/Ray1235/CoDMayaTools/archive/master.zip) or just the [CoDMayaTools.py](https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/CoDMayaTools.py) file (right click & save). You'll only need that single file.
+1) Download the latest version from the [releases section](https://github.com/Ray1235/CoDMayaTools/releases).
 
-2) Copy CoDMayaTools.py to:
+2) Copy unzip the contents to:
 
 ```
 <USER>\Documents\maya\<Your maya version>\scripts
@@ -39,6 +39,8 @@
 ```
 python("import CoDMayaTools");
 ```
+
+or simply rename the usersetup_example.mel to usersetup.mel if you do not have on.
 
 4) Save and close the file and launch Maya
 
