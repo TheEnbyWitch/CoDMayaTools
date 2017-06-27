@@ -1,6 +1,11 @@
 Please check back for updates regularly, if you have an issue that isn't mentioned here/fixed in a recent version please open an issue.
 
 # Changelog
+## VERSION 2.5.3
+* Added auto-updater (Seperate EXE to handle it so user isn't stuck waiting for it and doesn't crash some ver. of Maya, can be disabled)
+* Fully removed Bo3 Mode (its checkbox wasn't removed)
+* Added an option to print XMODEL_EXPORT info while exporting.
+
 ## VERSION 2.5.2
 * Grab notes not working.
 
