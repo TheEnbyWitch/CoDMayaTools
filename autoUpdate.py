@@ -3,10 +3,18 @@ import socket
 import os
 import time
 import sys
+import argparse
 
-FILE_VERSION = 1.2
-VERSION_CHECK_URL = "https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/version"
+parser = argparse.ArgumentParser()
+parser.add_argument("-version", help="Current Version of the script.", required = True, dest="version")
+parser.add_argument("-version_info_url", help="Version info URL containing version and URL to new file on seperate lines.", required = True, dest = "version_url")
+
+results = parser.parse_args()
+
+FILE_VERSION = results.version
+VERSION_CHECK_URL = results.version_url
 WORKING_DIR = os.path.dirname(os.path.realpath(sys.argv[0]))
+CODMAYAPY = os.path.join(WORKING_DIR, "CoDMayaTools.py")
 
 def HasInternetAccess():
     # Apparently we needed Admin privs. to use ping -c that Aidan used originally..
@@ -32,10 +40,11 @@ def CheckForUpdates():
         if not info or len(info) == 0:
             return None
 
+        CODMAYAPY = os.path.join(WORKING_DIR, "CoDMayaTools.py")
         mostRecentVersion = float(info[0])
         downloadUpdateURL = info[1] # Location of the most recent file
         
-        if mostRecentVersion > FILE_VERSION:
+        if mostRecentVersion > int(FILE_VERSION):
             return (mostRecentVersion, downloadUpdateURL)
     except Exception as e :
         print("<-- Exception occured in \"CheckForUpdates()\": %s.\n\n" % e)
@@ -54,9 +63,7 @@ def DownloadUpdate(downloadUpdateURL):
 
         print("<-- Downloading update from: %s\n" % str(downloadUpdateURL))
 
-        path = os.path.join(WORKING_DIR, "CoDMayaTools.py")
-
-        with open(path, 'w') as f:
+        with open(CODMAYAPY, 'w') as f:
             f.write(newCode)
         
         print("<-- Update complete, reload script or restart Maya to apply changes.\n\n")
