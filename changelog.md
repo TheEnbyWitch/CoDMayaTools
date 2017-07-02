@@ -5,6 +5,7 @@ Please check back for updates regularly, if you have an issue that isn't mention
 * Fixed errors with 1 frame animations.
 * Fixed bone-only model exporting.
 * Merged XANIM/XCAM functions.
+* Added button to clear cosmetic parent.
 
 ## VERSION 2.5.3
 * Added auto-updater (Seperate EXE to handle it so user isn't stuck waiting for it and doesn't crash some ver. of Maya, can be disabled)
