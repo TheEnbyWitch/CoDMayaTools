@@ -54,7 +54,7 @@ from subprocess import Popen, PIPE, STDOUT
 
 WarningsDuringExport = 0 # Number of warnings shown during current export
 CM_TO_INCH = 0.3937007874015748031496062992126 # 1cm = 50/127in
-FILE_VERSION = 2.53
+FILE_VERSION = 2.54
 VERSION_CHECK_URL = "https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/version"
 GLOBAL_STORAGE_REG_KEY = (reg.HKEY_CURRENT_USER, "Software\\CoDMayaTools") # Registry path for global data storage
 #				name	 : 		control code name,				control friendly name,	data storage node name,	refresh function,		export function
@@ -761,10 +761,18 @@ def IWIToDDSUser():
 # ---------------------------------------------------------------- Export Joints (XModel and XAnim) ----------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def GetJointList():
+	# Joints list.
 	joints = []
 	# Try get the cosmetic bone.
 	try:
+		# Get it.
 		cosmeticBone = cmds.getAttr(OBJECT_NAMES["xmodel"][2]+ ".Cosmeticbone").split("|")[-1].split(":")[-1]
+		# Does it exist in scene?
+		if not cmds.objExists(cosmeticBone):
+			# If it doesn't, don't assign a cosmetic bone.
+			cosmeticBone = None
+		else:
+			cosmeticBone = cosmeticBone.split("|")[-1].split(":")[-1]
 	except:
 		# No cosmetic set.
 		cosmeticBone = None
@@ -797,12 +805,12 @@ def GetJointList():
 			if node[2]:
 				# Don't use main root bone.
 				if node[0] > -1:
-					# Name of the bones parent, none for Root bone.
+					# Name of the bones parent, none for Root bone. Split it to remove dagpath seperator and namespace.
 					bone_parentname = joints[node[0]][1].split("|")[-1].split(":")[-1]
 				else:
 					# Skip.
 					bone_parentname = None
-				# Name of the bone.
+				# Name of the bone. Split it to remove dagpath seperator and namespace.
 				bone_name = node[1].partialPathName().split("|")[-1].split(":")[-1]
 				# Check for automatic rename.
 				if QueryToggableOption("AutomaticRename"):
@@ -837,11 +845,9 @@ def GetJointList():
 				searchQueue.put((index, childNode, selectedObjects.hasItem(dagPath) and dagPath.hasFn(OpenMaya.MFn.kJoint)))
 
 	# Cosmetic bones must be at the end, so append them AFTER we've added other bones.
+	joints = joints + cosmetic_list
 
-	for joint in cosmetic_list:
-		joints.append(joint)
-
-	LogExport("Exporting %i joints" % len(joints))
+	LogExport("Exporting %i joints\n" % len(joints))
 	LogExport("Exporting %i cosmetics." % len(cosmetic_list))
 
 	return joints, cosmetic_list, cosmetic_id
@@ -996,7 +1002,36 @@ def WriteCameraData(f, cameraNode):
 	WriteNodeFloat(f, "fstop", 0.7)
 	WriteNodeFloat(f, "lense", 10, True)
 
-	
+# Get count for progress bar. No impact on export speed.
+def GetNumInfo(selectedObjects):
+	# Mesh array to check for duplicates.
+	meshes = []
+	maxValue = 0
+
+	maxValue += len(cmds.ls(selection = True, type = "joint"))
+
+	for i in range(0, selectedObjects.length()):
+		# Grab mesh.
+		object = OpenMaya.MObject()
+		dagPath = OpenMaya.MDagPath()
+		selectedObjects.getDependNode(i, object)
+		selectedObjects.getDagPath(i, dagPath)
+		# Check it's a mesh.
+		if not dagPath.hasFn(OpenMaya.MFn.kMesh):
+			continue
+		dagPath.extendToShape()
+		# Check for duplicate.
+		if dagPath.partialPathName() in meshes:
+			continue
+		# Append.
+		meshes.append(dagPath.partialPathName())
+		# Get vert count for this mesh.
+		maxValue += OpenMaya.MItMeshVertex(dagPath).count()
+		# Get Face found for this mesh.
+		maxValue += OpenMaya.MItMeshPolygon(dagPath).count()
+
+	# Return value * 2 because we will loop over 2x for getting info and writing it to export.
+	return maxValue * 2 + 1
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # -------------------------------------------------------------------------- Export XModel -------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1005,6 +1040,7 @@ def ExportXModel(filePath):
 	numSelectedObjects = len(cmds.ls(selection=True))
 	if numSelectedObjects == 0:
 		return "Error: No objects selected for export"
+
 
 	# Get data
 	joints = GetJointList()
@@ -1139,7 +1175,9 @@ def ExportXModel(filePath):
 		
 	f.close()
 	ProgressBarStep()
+	ProgressBarStep()
 	cmds.refresh()
+
 	if QueryToggableOption('E2B'):
 		LogExport("Converting to XMODEL_BIN\n")
 		try:
@@ -1213,38 +1251,7 @@ def VerticesObjRelToLocalRel(vertexIndices, toConvertVertexIndices):
 			return False
 	
 	return localVertexIndices
-
-# Get count for progress bar. No impact on export speed.
-def GetNumInfo(selectedObjects):
-	# Mesh array to check for duplicates.
-	meshes = []
-	maxValue = 0
-
-	for i in range(0, selectedObjects.length()):
-		# Grab mesh.
-		object = OpenMaya.MObject()
-		dagPath = OpenMaya.MDagPath()
-		selectedObjects.getDependNode(i, object)
-		selectedObjects.getDagPath(i, dagPath)
-		# Check it's a mesh.
-		if not dagPath.hasFn(OpenMaya.MFn.kMesh):
-			continue
-		dagPath.extendToShape()
-		# Check for duplicate.
-		if dagPath.partialPathName() in meshes:
-			continue
-		# Append.
-		meshes.append(dagPath.partialPathName())
-		# Get vert count for this mesh.
-		maxValue += OpenMaya.MItMeshVertex(dagPath).count()
-		# Get Face found for this mesh.
-		maxValue += OpenMaya.MItMeshPolygon(dagPath).count()
-
-	# Return value * 2 because we will loop over 2x for getting info and writing it to export.
-	return maxValue * 2
-
 		
-	
 def GetShapes(joints):
 	LogExport("Beginning Export...\n")
 	# Vars
@@ -1266,11 +1273,11 @@ def GetShapes(joints):
 	# The global vert index at the start of each object
 	currentStartingVertIndex = 0
 
+
 	progressInfo = GetNumInfo(selectedObjects)
 
-	# - Log Export - 
-	LogExport("Exporting %i faces/meshes.\n" % (progressInfo / 2))
-	# - Log Export - 
+	if progressInfo == 0:
+		return "No info to export."
 
 	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue = progressInfo)
 	
@@ -1523,7 +1530,7 @@ def ExportXAnim(filePath):
 		typex, value, traceback = sys.exc_info()
 		return "Unable to create files:\n\n%s" % value.strerror
 
-	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue=frameEnd - 1)
+	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue=frameEnd + 1)
 	
 	# Write header
 	f.write("// Export filename: '%s'\n" % os.path.normpath(filePath))
@@ -1595,6 +1602,8 @@ def ExportXAnim(filePath):
 			f.write("\nPART %i\nNUMTRACKS 0\n" % i)
 	
 	f.close()
+
+	ProgressBarStep()
 
 	cmds.refresh()
 
@@ -1995,6 +2004,7 @@ def CreateXModelWindow():
 	exportMultipleSlotsButton = cmds.button(label="Export Multiple Slots", command="CoDMayaTools.GeneralWindow_ExportMultiple('xmodel')", annotation="Automatically export multiple slots at once, using each slot's saved selection")
 	exportInMultiExportCheckbox = cmds.checkBox(OBJECT_NAMES['xmodel'][0]+"_UseInMultiExportCheckBox", label="Use current slot for Export Multiple", changeCommand="CoDMayaTools.GeneralWindow_ExportInMultiExport('xmodel')", annotation="Check this make the 'Export Multiple Slots' button export this slot")
 	setCosmeticParentbone = cmds.button(OBJECT_NAMES['xmodel'][0]+"_MarkCosmeticParent", label="Set selected as Cosmetic Parent", command="CoDMayaTools.SetCosmeticParent('xmodel')", annotation="Set this bone as our cosmetic parent. All bones under this will be cosmetic.")
+	RemoveCosmeticParent = cmds.button(OBJECT_NAMES['xmodel'][0]+"_ClearCosmeticParent", label="Clear Cosmetic Parent", command="CoDMayaTools.ClearCosmeticParent('xmodel')", annotation="Remove the cosmetic parent.")
 
 	# Setup form
 	cmds.formLayout(form, edit=True,
@@ -2007,7 +2017,8 @@ def CreateXModelWindow():
 					(exportInMultiExportCheckbox, 'bottom', 9), (exportInMultiExportCheckbox, 'right', 6),
 					(exportSelectedButton, 'left', 10),
 					(saveSelectionButton, 'right', 10),
-					(setCosmeticParentbone, 'left', 10)],
+					(setCosmeticParentbone, 'left', 10),
+					(RemoveCosmeticParent, 'left', 10)],
 					#(exportSelectedButton, 'bottom', 6), (exportSelectedButton, 'left', 10),
 					#(saveSelectionButton, 'bottom', 6), (saveSelectionButton, 'right', 10),
 					#(getSavedSelectionButton, 'bottom', 6)],
@@ -2019,8 +2030,10 @@ def CreateXModelWindow():
 						(exportSelectedButton, 'bottom', 5, separator2),
 						(saveSelectionButton, 'bottom', 5, separator2),
 						(setCosmeticParentbone, 'bottom', 5, separator2),
+						(RemoveCosmeticParent, 'bottom', 5, separator2),
 						(saveSelectionButton, 'bottom', 5, setCosmeticParentbone),
 						(exportSelectedButton, 'bottom', 5, setCosmeticParentbone),
+						(setCosmeticParentbone, 'bottom', 5, RemoveCosmeticParent),
 						(getSavedSelectionButton, 'bottom', 5, separator2), (getSavedSelectionButton, 'right', 10, saveSelectionButton),
 						(getSavedSelectionButton, 'bottom', 5, setCosmeticParentbone),
 						(separator2, 'bottom', 5, exportMultipleSlotsButton)])
@@ -2071,6 +2084,18 @@ def SetCosmeticParent(reqarg):
 	cmds.setAttr(OBJECT_NAMES['xmodel'][2] + ".Cosmeticbone", selection[0], type="string")
 
 	MessageBox("\"%s\" has now been set as the cosmetic parent." % str(selection[0]))
+
+def ClearCosmeticParent(reqarg):
+	cosmetic_bone = cmds.getAttr(OBJECT_NAMES["xmodel"][2]+ ".Cosmeticbone")
+
+	if cosmetic_bone is None:
+		cmds.error("No cosmetic bone set.")
+
+	cosmetic_bone = cosmetic_bone.split("|")[-1].split(":")[-1]
+	
+	if cosmetic_bone != "" or cosmetic_bone is not None:
+		cmds.setAttr(OBJECT_NAMES['xmodel'][2] + ".Cosmeticbone", "", type="string")
+		MessageBox("Cosmetic Parent \"%s\" has now been removed." % cosmetic_bone)
 	
 	
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2094,24 +2119,24 @@ def CreateXAnimWindow():
 	separator3 = cmds.separator(style='in')
 	
 	framesLabel = cmds.text(label="Frames:", annotation="Range of frames to export")
-	framesStartField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameStartField", height=21, width=35, minValue=0, changeCommand=XAnimWindow_UpdateFrameRange, annotation="Starting frame to export (inclusive)")
+	framesStartField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameStartField", height=21, width=35, minValue=0, changeCommand="CoDMayaTools.UpdateFrameRange('xanim')", annotation="Starting frame to export (inclusive)")
 	framesToLabel = cmds.text(label="to")
-	framesEndField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameEndField", height=21, width=35, minValue=0, changeCommand=XAnimWindow_UpdateFrameRange, annotation="Ending frame to export (inclusive)")
-	GrabFrames = cmds.button(label="Grab Frames", width=75, command=XAnimWindow_SetFrames, annotation="Get frame end and start from scene.")
+	framesEndField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameEndField", height=21, width=35, minValue=0, changeCommand="CoDMayaTools.UpdateFrameRange('xanim')", annotation="Ending frame to export (inclusive)")
+	GrabFrames = cmds.button(label="Grab Frames", width=75, command="CoDMayaTools.SetFrames('xanim')", annotation="Get frame end and start from scene.")
 	fpsLabel = cmds.text(label="FPS:")
-	fpsField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FPSField", height=21, width=35, value=1, minValue=1, changeCommand=XAnimWindow_UpdateFramerate, annotation="Animation FPS")
+	fpsField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FPSField", height=21, width=35, value=1, minValue=1, changeCommand="CoDMayaTools.UpdateFramerate('xanim')", annotation="Animation FPS")
 	qualityLabel = cmds.text(label="Quality (0-10)", annotation="Quality of the animation, higher values result in less jitter but produce larger files. Default is 0")
-	qualityField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_qualityField", height=21, width=35, value=0, minValue=0, maxValue=10, step=1, changeCommand=XAnimWindow_UpdateMultiplier, annotation="Quality of the animation, higher values result in less jitter but produce larger files.")
+	qualityField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_qualityField", height=21, width=35, value=0, minValue=0, maxValue=10, step=1, changeCommand="CoDMayaTools.UpdateMultiplier('xanim')", annotation="Quality of the animation, higher values result in less jitter but produce larger files.")
 	
 	notetracksLabel = cmds.text(label="Notetrack:", annotation="Notetrack info for the animation")
-	noteList = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", allowMultiSelection=False, selectCommand=XAnimWindow_SelectNote, annotation="List of notes in the notetrack")
-	addNoteButton = cmds.button(label="Add Note", width=75, command=XAnimWindow_AddNote, annotation="Add a note to the notetrack")
-	ReadNotesButton = cmds.button(label="Grab Notes", width=75, command=ReadXanimNotes, annotation="Grab Notes from Notetrack in Outliner")
-	ClearNotes = cmds.button(label="Clear Notes", width=75, command=ClearxAnimNotes, annotation="Clear ALL notetracks.")
-	RenameNoteTrack = cmds.button(label="Rename Note", command=RenameXanimNotes, annotation="Rename the currently selected note.")
-	removeNoteButton = cmds.button(label="Remove Note", command=XAnimWindow_RemoveNote, annotation="Remove the currently selected note from the notetrack")
+	noteList = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", allowMultiSelection=False, selectCommand="CoDMayaTools.SelectNote('xanim')", annotation="List of notes in the notetrack")
+	addNoteButton = cmds.button(label="Add Note", width=75, command="CoDMayaTools.AddNote('xanim')", annotation="Add a note to the notetrack")
+	ReadNotesButton = cmds.button(label="Grab Notes", width=75, command="CoDMayaTools.ReadNotetracks('xanim')", annotation="Grab Notes from Notetrack in Outliner")
+	ClearNotes = cmds.button(label="Clear Notes", width=75, command="CoDMayaTools.ClearNotes('xanim')", annotation="Clear ALL notetracks.")
+	RenameNoteTrack = cmds.button(label="Rename Note", command="CoDMayaTools.RenameNotes('xanim')", annotation="Rename the currently selected note.")
+	removeNoteButton = cmds.button(label="Remove Note", command="CoDMayaTools.RemoveNote('xanim')", annotation="Remove the currently selected note from the notetrack")
 	noteFrameLabel = cmds.text(label="Frame:", annotation="The frame the currently selected note is applied to")
-	noteFrameField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_NoteFrameField", changeCommand=XAnimWindow_UpdateNoteFrame, height=21, width=30, minValue=0, annotation="The frame the currently selected note is applied to")
+	noteFrameField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_NoteFrameField", changeCommand="CoDMayaTools.UpdateNoteFrame('xanim')", height=21, width=30, minValue=0, annotation="The frame the currently selected note is applied to")
 	
 	saveToLabel = cmds.text(label="Save to:", annotation="This is where .xanim_export is saved to")
 	saveToField = cmds.textField(OBJECT_NAMES['xanim'][0]+"_SaveToField", height=21, changeCommand="CoDMayaTools.GeneralWindow_SaveToField('xanim')", annotation="This is where .xanim_export is saved to")
@@ -2178,179 +2203,6 @@ def CreateXAnimWindow():
 						(getSavedSelectionButton, 'bottom', 5, separator3), (getSavedSelectionButton, 'right', 10, saveSelectionButton),
 						(separator3, 'bottom', 5, exportMultipleSlotsButton)
 						])
-
-def XAnimWindow_SetFrames(required_parameter):
-    start = cmds.playbackOptions(minTime=True, query=True)
-    end = cmds.playbackOptions(maxTime=True, query=True)  # Query start and end froms.
-    cmds.intField(OBJECT_NAMES['xanim'][0] + "_FrameStartField", edit=True, value=start)
-    cmds.intField(OBJECT_NAMES['xanim'][0] + "_FrameEndField", edit=True, value=end)
-    XAnimWindow_UpdateFrameRange(1)
-
-def XAnimWindow_UpdateFrameRange(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
-	start = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameStartField", query=True, value=True)
-	end = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameEndField", query=True, value=True)
-	cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".frameRanges[%i]" % slotIndex), start, end, type='long2')
-
-def XAnimWindow_UpdateFramerate(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
-	fps = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FPSField", query=True, value=True)
-	cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".framerate[%i]" % slotIndex), fps)
-
-def XAnimWindow_UpdateMultiplier(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
-	fps = cmds.intField(OBJECT_NAMES['xanim'][0]+"_qualityField", query=True, value=True)
-	cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".multiplier[%i]" % slotIndex), fps)
-
-def XAnimWindow_AddNote(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
-	if cmds.promptDialog(title="Add Note to Slot %i's Notetrack" % slotIndex, message="Enter the note's name:\t\t  ") != "Confirm":
-		return
-	
-	userInput = cmds.promptDialog(query=True, text=True)
-	noteName = "".join([c for c in userInput if c.isalnum() or c=="_"]) # Remove all non-alphanumeric characters
-	if noteName == "":
-		MessageBox("Invalid note name")
-		return
-		
-	existingItems = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", query=True, allItems=True)
-	
-	if existingItems != None and noteName in existingItems:
-		MessageBox("A note with this name already exists")
-		
-	noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
-	noteList += "%s:%i," % (noteName, cmds.currentTime(query=True))
-	cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-	
-	cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=noteName, selectIndexedItem=len((existingItems or []))+1)
-	XAnimWindow_SelectNote()
-
-def ReadXanimNotes(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
-	existingItems = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", query=True, allItems=True)
-	noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
-
-	notetracks = ["WraithNotes", "SENotes", "NoteTrack"]
-
-	for notetrack in notetracks:
-		if cmds.objExists(notetrack):
-			cmds.select( clear=True )
-			cmds.select( notetrack, hi=True )
-
-			notes = cmds.ls( selection=True, type="transform" ) # Grab what is selected.
-
-			for NoteTrack in notes: # Go through each one.
-				try:
-					for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
-						if NoteTrack == "end" or NoteTrack == "loop_end":
-							continue
-						noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
-						cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-						cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
-				except Exception as e:
-					if NoteTrack != notetrack:
-						print("Error has occured while reading note: %s, the error was: '%s', Skipping." % (NoteTrack, e))
-					pass
-
-	XAnimWindow_SelectNote()
-
-
-def RenameXanimNotes(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
-	currentIndex = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", query=True, selectIndexedItem=True)
-	if currentIndex != None and len(currentIndex) > 0 and currentIndex[0] >= 1:
-		if cmds.promptDialog(title="Rename NoteTrack in slot", message="Enter new notetrack name:\t\t  ") != "Confirm":
-			return
-	
-		userInput = cmds.promptDialog(query=True, text=True)
-		noteName = "".join([c for c in userInput if c.isalnum() or c=="_"]) # Remove all non-alphanumeric characters
-		if noteName == "":
-			MessageBox("Invalid note name")
-			return
-		currentIndex = currentIndex[0]
-		noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
-		notes = noteList.split(",")
-		noteInfo = notes[currentIndex-1].split(":")
-		note = int(noteInfo[1])
-		NoteTrack = userInput
-		
-		# REMOVE NOTE
-
-		cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, removeIndexedItem=currentIndex)
-		noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
-		notes = noteList.split(",")
-		del notes[currentIndex-1]
-		noteList = ",".join(notes)
-		cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-
-		# REMOVE NOTE
-		noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
-		noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
-		cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-		cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=currentIndex)
-		XAnimWindow_SelectNote()
-
-
-	
-def XAnimWindow_RemoveNote(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
-	currentIndex = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", query=True, selectIndexedItem=True)
-	if currentIndex != None and len(currentIndex) > 0 and currentIndex[0] >= 1:
-		currentIndex = currentIndex[0]
-		cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, removeIndexedItem=currentIndex)
-		noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
-		notes = noteList.split(",")
-		del notes[currentIndex-1]
-		noteList = ",".join(notes)
-		cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-		XAnimWindow_SelectNote()
-
-def ClearxAnimNotes(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
-	notes = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", query=True, allItems=True)
-	if notes is None:
-		return
-	for note in notes:
-		cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", edit=True, removeItem=note)
-	noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
-	notetracks = noteList.split(",")
-	del notetracks
-	noteList = ""
-	cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-	XAnimWindow_SelectNote()
-		
-def XAnimWindow_UpdateNoteFrame(newFrame):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
-	currentIndex = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", query=True, selectIndexedItem=True)
-	if currentIndex != None and len(currentIndex) > 0 and currentIndex[0] >= 1:
-		currentIndex = currentIndex[0]
-		noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
-		notes = noteList.split(",")
-		parts = notes[currentIndex-1].split(":")
-		if len(parts) < 2:
-			parts("Error parsing notetrack string (A) at %i: %s" % (currentIndex, noteList))
-		notes[currentIndex-1] = "%s:%i" % (parts[0], newFrame)
-		noteList = ",".join(notes)
-		cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-		
-def XAnimWindow_SelectNote():
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
-	currentIndex = cmds.textScrollList(OBJECT_NAMES['xanim'][0]+"_NoteList", query=True, selectIndexedItem=True)
-	if currentIndex != None and len(currentIndex) > 0 and currentIndex[0] >= 1:
-		currentIndex = currentIndex[0]
-		noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
-		notes = noteList.split(",")
-		parts = notes[currentIndex-1].split(":")
-		if len(parts) < 2:
-			error("Error parsing notetrack string (B) at %i: %s" % (currentIndex, noteList))
-			
-		frame=0
-		try: 
-			frame = int(parts[1])
-		except ValueError:
-			pass
-			
-		noteFrameField = cmds.intField(OBJECT_NAMES['xanim'][0]+"_NoteFrameField", edit=True, value=frame)
 		
 def RefreshXAnimWindow():
 	# Refresh/create node
@@ -2444,24 +2296,24 @@ def CreateXCamWindow():
 	separator3 = cmds.separator(style='in')
 	
 	framesLabel = cmds.text(label="Frames:", annotation="Range of frames to export")
-	framesStartField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FrameStartField", height=21, width=35, minValue=0, changeCommand=XCamWindow_UpdateFrameRange, annotation="Starting frame to export (inclusive)")
+	framesStartField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FrameStartField", height=21, width=35, minValue=0, changeCommand="CoDMayaTools.UpdateFrameRange('xcam')", annotation="Starting frame to export (inclusive)")
 	framesToLabel = cmds.text(label="to")
-	framesEndField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FrameEndField", height=21, width=35, minValue=0, changeCommand=XCamWindow_UpdateFrameRange, annotation="Ending frame to export (inclusive)")
+	framesEndField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FrameEndField", height=21, width=35, minValue=0, changeCommand="CoDMayaTools.UpdateFrameRange('xcam')", annotation="Ending frame to export (inclusive)")
 	fpsLabel = cmds.text(label="FPS:")
-	fpsField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FPSField", height=21, width=35, value=1, minValue=1, changeCommand=XCamWindow_UpdateFramerate, annotation="Animation FPS")
+	fpsField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FPSField", height=21, width=35, value=1, minValue=1, changeCommand="CoDMayaTools.UpdateFramerate('xcam')", annotation="Animation FPS")
 	#qualityLabel = cmds.text(label="Quality (0-10)", annotation="Quality of the animation, higher values result in less jitter but produce larger files. Default is 0")
 	#qualityField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_qualityField", height=21, width=35, value=0, minValue=0, maxValue=10, step=1, changeCommand=XCamWindow_UpdateMultiplier, annotation="Quality of the animation, higher values result in less jitter but produce larger files.")
 	
 	notetracksLabel = cmds.text(label="Notetrack:", annotation="Notetrack info for the animation")
-	noteList = cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", allowMultiSelection=False, selectCommand=XCamWindow_SelectNote, annotation="List of notes in the notetrack")
-	addNoteButton = cmds.button(label="Add Note", width=75, command=XCamWindow_AddNote, annotation="Add a note to the notetrack")
-	ReadNotesButton = cmds.button(label="Grab Notes", width=75, command=ReadXcamNotes, annotation="Grab Notes from Notetrack in Outliner")
-	RenameNoteTrack = cmds.button(label="Rename Note", command=RenameXcamNotes, annotation="Rename the currently selected note.")
-	removeNoteButton = cmds.button(label="Remove Note", command=XCamWindow_RemoveNote, annotation="Remove the currently selected note from the notetrack")
+	noteList = cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", allowMultiSelection=False, selectCommand="CoDMayaTools.SelectNote('xcam')", annotation="List of notes in the notetrack")
+	addNoteButton = cmds.button(label="Add Note", width=75, command="CoDMayaTools.AddNote('xcam')", annotation="Add a note to the notetrack")
+	ReadNotesButton = cmds.button(label="Grab Notes", width=75, command="CoDMayaTools.ReadNotetracks('xcam')", annotation="Grab Notes from Notetrack in Outliner")
+	RenameNoteTrack = cmds.button(label="Rename Note", command="CoDMayaTools.RenameNotes('xcam')", annotation="Rename the currently selected note.")
+	removeNoteButton = cmds.button(label="Remove Note", command="CoDMayaTools.RemoveNote('xcam')", annotation="Remove the currently selected note from the notetrack")
 	noteFrameLabel = cmds.text(label="Frame:", annotation="The frame the currently selected note is applied to")
-	noteFrameField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_NoteFrameField", changeCommand=XCamWindow_UpdateNoteFrame, height=21, width=30, minValue=0, annotation="The frame the currently selected note is applied to")
-	GrabFrames = cmds.button(label="Grab Frames", width=75, command=XCamWindow_SetFrames, annotation="Get frame end and start from scene.")
-	ClearNotes = cmds.button(label="Clear Notes", width=75, command=ClearxCAMNotes, annotation="Clear ALL notetracks.")
+	noteFrameField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_NoteFrameField", changeCommand="CoDMayaTools.UpdateNoteFrame('xcam')", height=21, width=30, minValue=0, annotation="The frame the currently selected note is applied to")
+	GrabFrames = cmds.button(label="Grab Frames", width=75, command="CoDMayaTools.SetFrames('xcam')", annotation="Get frame end and start from scene.")
+	ClearNotes = cmds.button(label="Clear Notes", width=75, command="CoDMayaTools.ClearNotes('xcam')", annotation="Clear ALL notetracks.")
 	saveToLabel = cmds.text(label="Save to:", annotation="This is where .xcam_export is saved to")
 	saveToField = cmds.textField(OBJECT_NAMES['xcam'][0]+"_SaveToField", height=21, changeCommand="CoDMayaTools.GeneralWindow_SaveToField('xcam')", annotation="This is where .xcam_export is saved to")
 	fileBrowserButton = cmds.button(label="...", height=21, command="CoDMayaTools.GeneralWindow_FileBrowser('xcam', \"XCam Intermediate File (*.xcam_export)\")", annotation="Open a file browser dialog")
@@ -2528,179 +2380,7 @@ def CreateXCamWindow():
 						(separator3, 'bottom', 5, exportMultipleSlotsButton)
 						])
 
-def ClearxCAMNotes(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
-	notes = cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", query=True, allItems=True)
-	if notes is None:
-		return
-	for note in notes:
-		cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, removeItem=note)
-	noteList = cmds.getAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex)) or ""
-	notetracks = noteList.split(",")
-	del notetracks
-	noteList = ""
-	cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-	XAnimWindow_SelectNote()
 
-def XCamWindow_SetFrames(required_parameter):
-    start = cmds.playbackOptions(minTime=True, query=True)
-    end = cmds.playbackOptions(maxTime=True, query=True)  # Query start and end froms.
-    cmds.intField(OBJECT_NAMES['xcam'][0] + "_FrameStartField", edit=True, value=start)
-    cmds.intField(OBJECT_NAMES['xcam'][0] + "_FrameEndField", edit=True, value=end)
-    XCamWindow_UpdateFrameRange(1)
-
-def XCamWindow_UpdateFrameRange(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
-	start = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FrameStartField", query=True, value=True)
-	end = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FrameEndField", query=True, value=True)
-	cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".frameRanges[%i]" % slotIndex), start, end, type='long2')
-
-def XCamWindow_UpdateFramerate(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
-	fps = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FPSField", query=True, value=True)
-	cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".framerate[%i]" % slotIndex), fps)
-
-def XCamWindow_UpdateMultiplier(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
-	fps = cmds.intField(OBJECT_NAMES['xcam'][0]+"_qualityField", query=True, value=True)
-	cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".multiplier[%i]" % slotIndex), fps)
-
-def XCamWindow_AddNote(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
-	if cmds.promptDialog(title="Add Note to Slot %i's Notetrack" % slotIndex, message="Enter the note's name:\t\t  ") != "Confirm":
-		return
-	
-	userInput = cmds.promptDialog(query=True, text=True)
-	noteName = "".join([c for c in userInput if c.isalnum() or c=="_"]) # Remove all non-alphanumeric characters
-	if noteName == "":
-		MessageBox("Invalid note name")
-		return
-		
-	existingItems = cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", query=True, allItems=True)
-	
-	if existingItems != None and noteName in existingItems:
-		MessageBox("A note with this name already exists")
-		
-	noteList = cmds.getAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex)) or ""
-	noteList += "%s:%i," % (noteName, cmds.currentTime(query=True))
-	cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-	
-	cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, append=noteName, selectIndexedItem=len((existingItems or []))+1)
-	XCamWindow_SelectNote()
-
-def ReadXcamNotes(required_parameter):
-
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
-	existingItems = cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", query=True, allItems=True)
-	noteList = cmds.getAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex)) or ""
-
-	notetracks = ["WraithNotes", "SENotes", "NoteTrack"]
-
-	for notetrack in notetracks:
-		if cmds.objExists(notetrack):
-			cmds.select( clear=True )
-			cmds.select( notetrack, hi=True )
-
-			notes = cmds.ls( selection=True, type="transform" ) # Grab what is selected.
-
-			for NoteTrack in notes: # Go through each one.
-				try:
-					for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
-						if NoteTrack == "end" or NoteTrack == "loop_end":
-							continue
-						noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
-						cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-						cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
-				except Exception as e:
-					if NoteTrack != notetrack:
-						print("Error has occured while reading note: %s, the error was: '%s', Skipping." % (NoteTrack, e))
-					pass
-
-	XAnimWindow_SelectNote()
-
-def RenameXcamNotes(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
-	currentIndex = cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", query=True, selectIndexedItem=True)
-	if currentIndex != None and len(currentIndex) > 0 and currentIndex[0] >= 1:
-		if cmds.promptDialog(title="Rename NoteTrack in slot", message="Enter new notetrack name:\t\t  ") != "Confirm":
-			return
-	
-		userInput = cmds.promptDialog(query=True, text=True)
-		noteName = "".join([c for c in userInput if c.isalnum() or c=="_"]) # Remove all non-alphanumeric characters
-		if noteName == "":
-			MessageBox("Invalid note name")
-			return
-		currentIndex = currentIndex[0]
-		noteList = cmds.getAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex)) or ""
-		notes = noteList.split(",")
-		noteInfo = notes[currentIndex-1].split(":")
-		note = int(noteInfo[1])
-		NoteTrack = userInput
-		
-		# REMOVE NOTE
-
-		cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, removeIndexedItem=currentIndex)
-		noteList = cmds.getAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex)) or ""
-		notes = noteList.split(",")
-		del notes[currentIndex-1]
-		noteList = ",".join(notes)
-		cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-
-		# REMOVE NOTE
-		noteList = cmds.getAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex)) or ""
-		noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
-		cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-		cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=currentIndex)
-		XCamWindow_SelectNote()
-
-
-	
-def XCamWindow_RemoveNote(required_parameter):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
-	currentIndex = cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", query=True, selectIndexedItem=True)
-	if currentIndex != None and len(currentIndex) > 0 and currentIndex[0] >= 1:
-		currentIndex = currentIndex[0]
-		cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", edit=True, removeIndexedItem=currentIndex)
-		noteList = cmds.getAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex)) or ""
-		notes = noteList.split(",")
-		del notes[currentIndex-1]
-		noteList = ",".join(notes)
-		cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-		XCamWindow_SelectNote()
-		
-def XCamWindow_UpdateNoteFrame(newFrame):
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
-	currentIndex = cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", query=True, selectIndexedItem=True)
-	if currentIndex != None and len(currentIndex) > 0 and currentIndex[0] >= 1:
-		currentIndex = currentIndex[0]
-		noteList = cmds.getAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex)) or ""
-		notes = noteList.split(",")
-		parts = notes[currentIndex-1].split(":")
-		if len(parts) < 2:
-			error("Error parsing notetrack string (A) at %i: %s" % (currentIndex, noteList))
-		notes[currentIndex-1] = "%s:%i" % (parts[0], newFrame)
-		noteList = ",".join(notes)
-		cmds.setAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-		
-def XCamWindow_SelectNote():
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xcam'][0]+"_SlotDropDown", query=True, select=True)
-	currentIndex = cmds.textScrollList(OBJECT_NAMES['xcam'][0]+"_NoteList", query=True, selectIndexedItem=True)
-	if currentIndex != None and len(currentIndex) > 0 and currentIndex[0] >= 1:
-		currentIndex = currentIndex[0]
-		noteList = cmds.getAttr(OBJECT_NAMES['xcam'][2]+(".notetracks[%i]" % slotIndex)) or ""
-		notes = noteList.split(",")
-		parts = notes[currentIndex-1].split(":")
-		if len(parts) < 2:
-			error("Error parsing notetrack string (B) at %i: %s" % (currentIndex, noteList))
-			
-		frame=0
-		try: 
-			frame = int(parts[1])
-		except ValueError:
-			pass
-			
-		noteFrameField = cmds.intField(OBJECT_NAMES['xcam'][0]+"_NoteFrameField", edit=True, value=frame)
-		
 def RefreshXCamWindow():
 	# Refresh/create node
 	if len(cmds.ls(OBJECT_NAMES['xcam'][2])) == 0:
@@ -2771,6 +2451,248 @@ def RefreshXCamWindow():
 	useInMultiExport = cmds.getAttr(OBJECT_NAMES['xcam'][2]+(".useinmultiexport[%i]" % slotIndex))
 	cmds.checkBox(OBJECT_NAMES['xcam'][0]+"_UseInMultiExportCheckBox", edit=True, value=useInMultiExport)
 	
+# ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------- xAnim/xcam Export Data --------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+"""
+Set Frames
+
+Querys start and end frames and set thems for the window given by windowID
+
+"""
+def SetFrames(windowID):
+    start = cmds.playbackOptions(minTime=True, query=True)
+    end = cmds.playbackOptions(maxTime=True, query=True)  # Query start and end froms.
+    cmds.intField(OBJECT_NAMES[windowID][0] + "_FrameStartField", edit=True, value=start)
+    cmds.intField(OBJECT_NAMES[windowID][0] + "_FrameEndField", edit=True, value=end)
+    UpdateFrameRange(windowID)
+
+"""
+Update Frame Range
+
+Updates start and end frame when set by user or by other means.
+
+"""
+def UpdateFrameRange(windowID):
+	slotIndex = cmds.optionMenu(OBJECT_NAMES[windowID][0]+"_SlotDropDown", query=True, select=True)
+	start = cmds.intField(OBJECT_NAMES[windowID][0]+"_FrameStartField", query=True, value=True)
+	end = cmds.intField(OBJECT_NAMES[windowID][0]+"_FrameEndField", query=True, value=True)
+	cmds.setAttr(OBJECT_NAMES[windowID][2]+(".frameRanges[%i]" % slotIndex), start, end, type='long2')
+
+"""
+Update Framerate
+
+Updates framerate when set by user or by other means.
+
+"""
+def UpdateFramerate(windowID):
+	slotIndex = cmds.optionMenu(OBJECT_NAMES[windowID][0]+"_SlotDropDown", query=True, select=True)
+	fps = cmds.intField(OBJECT_NAMES[windowID][0]+"_FPSField", query=True, value=True)
+	cmds.setAttr(OBJECT_NAMES[windowID][2]+(".framerate[%i]" % slotIndex), fps)
+
+"""
+Update multiplier
+
+Updates multiplier when set by user or by other means.
+
+"""
+def UpdateMultiplier(windowID):
+	slotIndex = cmds.optionMenu(OBJECT_NAMES[windowID][0]+"_SlotDropDown", query=True, select=True)
+	fps = cmds.intField(OBJECT_NAMES[windowID][0]+"_qualityField", query=True, value=True)
+	cmds.setAttr(OBJECT_NAMES[windowID][2]+(".multiplier[%i]" % slotIndex), fps)
+
+"""
+Add notetrack
+
+Add notetrack to window and attribute when user creates one.
+
+"""
+def AddNote(windowID):
+	slotIndex = cmds.optionMenu(OBJECT_NAMES[windowID][0]+"_SlotDropDown", query=True, select=True)
+	if cmds.promptDialog(title="Add Note to Slot %i's Notetrack" % slotIndex, message="Enter the note's name:\t\t  ") != "Confirm":
+		return
+	
+	userInput = cmds.promptDialog(query=True, text=True)
+	noteName = "".join([c for c in userInput if c.isalnum() or c=="_"]) # Remove all non-alphanumeric characters
+	if noteName == "":
+		MessageBox("Invalid note name")
+		return
+		
+	existingItems = cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", query=True, allItems=True)
+	
+	if existingItems != None and noteName in existingItems:
+		MessageBox("A note with this name already exists")
+		
+	noteList = cmds.getAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex)) or ""
+	noteList += "%s:%i," % (noteName, cmds.currentTime(query=True))
+	cmds.setAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+	
+	cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", edit=True, append=noteName, selectIndexedItem=len((existingItems or []))+1)
+	SelectNote(windowID)
+
+"""
+Read notetracks 
+
+Read notetracks from imported animations.
+
+"""
+def ReadNotetracks(windowID):
+	slotIndex = cmds.optionMenu(OBJECT_NAMES[windowID][0]+"_SlotDropDown", query=True, select=True)
+	existingItems = cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", query=True, allItems=True)
+	noteList = cmds.getAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex)) or ""
+
+	notetracks = {"WraithNotes" : "translateX",
+				  "SENotes": "translateX", 
+				  "NoteTrack" : "MainNote"}
+
+	for notetrack, attribute in notetracks.iteritems():
+		if cmds.objExists(notetrack):
+			cmds.select( clear=True )
+			cmds.select( notetrack, hi=True )
+
+			notes = cmds.ls( selection=True, type="transform" ) # Grab what is selected.
+
+			for NoteTrack in notes: # Go through each one.
+				try:
+					for note in cmds.keyframe(NoteTrack, attribute="translateX", sl=False, q=True, tc=True): # See where are the keyframes.
+						if NoteTrack == "end" or NoteTrack == "loop_end":
+							continue
+						noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
+						cmds.setAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+						cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=len((existingItems or []))+1)
+				except Exception as e:
+					print("Error has occured while reading note: %s, the error was: '%s', Skipping." % (NoteTrack, e))
+					pass
+
+	SelectNote(windowID)
+
+"""
+Rename notetrack 
+
+Rename selected notetrack.
+
+"""
+def RenameNotes(windowID):
+	slotIndex = cmds.optionMenu(OBJECT_NAMES[windowID][0]+"_SlotDropDown", query=True, select=True)
+	currentIndex = cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", query=True, selectIndexedItem=True)
+	if currentIndex != None and len(currentIndex) > 0 and currentIndex[0] >= 1:
+		if cmds.promptDialog(title="Rename NoteTrack in slot", message="Enter new notetrack name:\t\t  ") != "Confirm":
+			return
+	
+		userInput = cmds.promptDialog(query=True, text=True)
+		noteName = "".join([c for c in userInput if c.isalnum() or c=="_"]) # Remove all non-alphanumeric characters
+		if noteName == "":
+			MessageBox("Invalid note name")
+			return
+		currentIndex = currentIndex[0]
+		noteList = cmds.getAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex)) or ""
+		notes = noteList.split(",")
+		noteInfo = notes[currentIndex-1].split(":")
+		note = int(noteInfo[1])
+		NoteTrack = userInput
+		
+		# REMOVE NOTE
+
+		cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", edit=True, removeIndexedItem=currentIndex)
+		noteList = cmds.getAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex)) or ""
+		notes = noteList.split(",")
+		del notes[currentIndex-1]
+		noteList = ",".join(notes)
+		cmds.setAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+
+		# REMOVE NOTE
+		noteList = cmds.getAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex)) or ""
+		noteList += "%s:%i," % (NoteTrack, note) # Add Notes to Aidan's list.
+		cmds.setAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+		cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", edit=True, append=NoteTrack, selectIndexedItem=currentIndex)
+		SelectNote(windowID)
+
+
+"""
+Remove Note 
+
+Remove selected notetrack.
+
+"""	
+def RemoveNote(windowID):
+	slotIndex = cmds.optionMenu(OBJECT_NAMES[windowID][0]+"_SlotDropDown", query=True, select=True)
+	currentIndex = cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", query=True, selectIndexedItem=True)
+	if currentIndex != None and len(currentIndex) > 0 and currentIndex[0] >= 1:
+		currentIndex = currentIndex[0]
+		cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", edit=True, removeIndexedItem=currentIndex)
+		noteList = cmds.getAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex)) or ""
+		notes = noteList.split(",")
+		del notes[currentIndex-1]
+		noteList = ",".join(notes)
+		cmds.setAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+		SelectNote(windowID)
+
+"""
+Clear notetracks 
+
+Clear ALL notetracks.
+
+"""
+def ClearNotes(windowID):
+	slotIndex = cmds.optionMenu(OBJECT_NAMES[windowID][0]+"_SlotDropDown", query=True, select=True)
+	notes = cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", query=True, allItems=True)
+	if notes is None:
+		return
+	for note in notes:
+		cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", edit=True, removeItem=note)
+	noteList = cmds.getAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex)) or ""
+	notetracks = noteList.split(",")
+	del notetracks
+	noteList = ""
+	cmds.setAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+	SelectNote(windowID)
+	
+"""
+Update Notetrack
+
+Update notetrack information.
+
+"""	
+def UpdateNoteFrame(windowID):
+	newFrame = cmds.intField(OBJECT_NAMES[windowID][0] + "_NoteFrameField", query = True, value = True)
+	slotIndex = cmds.optionMenu(OBJECT_NAMES[windowID][0]+"_SlotDropDown", query=True, select=True)
+	currentIndex = cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", query=True, selectIndexedItem=True)
+	if currentIndex != None and len(currentIndex) > 0 and currentIndex[0] >= 1:
+		currentIndex = currentIndex[0]
+		noteList = cmds.getAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex)) or ""
+		notes = noteList.split(",")
+		parts = notes[currentIndex-1].split(":")
+		if len(parts) < 2:
+			parts("Error parsing notetrack string (A) at %i: %s" % (currentIndex, noteList))
+		notes[currentIndex-1] = "%s:%i" % (parts[0], newFrame)
+		noteList = ",".join(notes)
+		cmds.setAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+	
+"""
+Select notetracks
+
+Select notetrack 
+
+"""
+def SelectNote(windowID):
+	slotIndex = cmds.optionMenu(OBJECT_NAMES[windowID][0]+"_SlotDropDown", query=True, select=True)
+	currentIndex = cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", query=True, selectIndexedItem=True)
+	if currentIndex != None and len(currentIndex) > 0 and currentIndex[0] >= 1:
+		currentIndex = currentIndex[0]
+		noteList = cmds.getAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex)) or ""
+		notes = noteList.split(",")
+		parts = notes[currentIndex-1].split(":")
+		if len(parts) < 2:
+			error("Error parsing notetrack string (B) at %i: %s" % (currentIndex, noteList))
+			
+		frame=0
+		try: 
+			frame = int(parts[1])
+		except ValueError:
+			pass
+			
+		noteFrameField = cmds.intField(OBJECT_NAMES[windowID][0]+"_NoteFrameField", edit=True, value=frame)
+
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ---------------------------------------------------------------------- General Export Window ---------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -2995,8 +2917,7 @@ def AboutWindow():
 def LegacyWindow():
 	result = cmds.confirmDialog(message="""CoD1 mode exports models that are compatible with CoD1.
 When this mode is disabled, the plugin will export models that are compatible with CoD2 and newer.
-
-BO3 Mode overrides CoD1 mode if active.""", button=['OK'], defaultButton='OK', title="Legacy options")
+""", button=['OK'], defaultButton='OK', title="Legacy options")
 		
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # --------------------------------------------------------------------------- Versioning (Deprecated) --------------------------------------------------------------
@@ -3266,8 +3187,11 @@ Check for updates using a seperate EXE.
 """
 def CheckForUpdatesEXE():
 	if QueryToggableOption("AutoUpdate"):
-		p = ("%s -name %s -version %f -version_info_url %s" % (os.path.join(WORKING_DIR, "autoUpdate.exe"), "CoDMayaTools.py", FILE_VERSION, VERSION_CHECK_URL))
-		subprocess.Popen(p)
+		try:
+			p = ("%s -name %s -version %f -version_info_url %s" % (os.path.join(WORKING_DIR, "autoUpdate.exe"), "CoDMayaTools.py", FILE_VERSION, VERSION_CHECK_URL))
+			subprocess.Popen(p)
+		except:
+			return
 	else:
 		return
 
