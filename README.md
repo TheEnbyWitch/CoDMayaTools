@@ -1,5 +1,5 @@
 # Call of Duty Maya Tools
-
+![](https://img.shields.io/github/downloads/Ray1235/CoDMayaTools/total.svg)
 ## Features
 * Support for Black Ops 3 with Export2Bin/ExportX
 * Backwards compatibility with CoD1 (untested & xmodels only)
