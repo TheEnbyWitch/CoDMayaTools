@@ -1530,7 +1530,7 @@ def ExportXAnim(filePath):
 		typex, value, traceback = sys.exc_info()
 		return "Unable to create files:\n\n%s" % value.strerror
 
-	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue=frameEnd + 1)
+	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue=max(1, (frameEnd-1)))
 	
 	# Write header
 	f.write("// Export filename: '%s'\n" % os.path.normpath(filePath))
