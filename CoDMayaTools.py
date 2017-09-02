@@ -21,9 +21,12 @@
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ---------------------------------------------------------- Customization (You can change these values!) ----------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
-MAX_WARNINGS_SHOWN = 100 # Maximum number of warnings to show per export
-EXPORT_WINDOW_NUMSLOTS = 100 # Number of slots in the export windows
-CONVERT_BLACK_VERTS_TO_WHITE = True # To automatically export any black vertices as white, set to 'True'. Otherwise, set to 'False'.
+ # Maximum number of warnings to show per export
+MAX_WARNINGS_SHOWN = 100
+ # Number of slots in the export windows
+EXPORT_WINDOW_NUMSLOTS = 100
+ # To export any black vertices as white, set to 'True'. Otherwise, set to 'False'.
+CONVERT_BLACK_VERTS_TO_WHITE = True
 
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ---------------------------------------------------------------------------- Global ------------------------------------------------------------------------------
@@ -54,7 +57,7 @@ from subprocess import Popen, PIPE, STDOUT
 
 WarningsDuringExport = 0 # Number of warnings shown during current export
 CM_TO_INCH = 0.3937007874015748031496062992126 # 1cm = 50/127in
-FILE_VERSION = 2.54
+FILE_VERSION = 2.60
 VERSION_CHECK_URL = "https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/version"
 GLOBAL_STORAGE_REG_KEY = (reg.HKEY_CURRENT_USER, "Software\\CoDMayaTools") # Registry path for global data storage
 #				name	 : 		control code name,				control friendly name,	data storage node name,	refresh function,		export function
@@ -76,7 +79,7 @@ RENAME_DICTONARY = {("tag_weapon", "tag_torso") : "tag_weapon_right",
 					("tag_flash1", "j_gun1") : "tag_flash_le",
 					("tag_brass1", None) : "tag_brass_le",
 }
-
+SUPPORTED_XMODELS = [25, 62]
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------ Init ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -86,52 +89,80 @@ def CreateMenu():
 	if cmds.control(OBJECT_NAMES['menu'][0], exists=True):
 		cmds.deleteUI(OBJECT_NAMES['menu'][0], menu=True)
 	
-	menu = cmds.menu(OBJECT_NAMES['menu'][0], label=OBJECT_NAMES["menu"][1], tearOff=True)
+	menu = cmds.menu(OBJECT_NAMES['menu'][0],
+	                 label=OBJECT_NAMES["menu"][1],tearOff=True)
 	
 	# Export tools
-	cmds.menuItem(label=OBJECT_NAMES['xmodel'][1]+"...", command="CoDMayaTools.ShowWindow('xmodel')")
-	cmds.menuItem(label=OBJECT_NAMES['xanim'][1]+"...", command="CoDMayaTools.ShowWindow('xanim')")
-	cmds.menuItem(label=OBJECT_NAMES['xcam'][1]+"...", command="CoDMayaTools.ShowWindow('xcam')")
-	
-	# Viewmodel controls submenu
-	cmds.menuItem(label="ViewModel Tools", subMenu=True)
-	cmds.menuItem(label="Create New Gunsleeve Maya File", command=CreateNewGunsleeveMayaFile)
-	cmds.menuItem(label="Create New ViewModel Rig File", command=CreateNewViewmodelRigFile)
-	cmds.menuItem(label="Switch Gun in Current Rig File", command=SwitchGunInCurrentRigFile)
-	cmds.setParent(menu, menu=True)
-	
+	cmds.menuItem(label=OBJECT_NAMES['xmodel'][1]+"...",
+	              command="CoDMayaTools.ShowWindow('xmodel')")
+	cmds.menuItem(label=OBJECT_NAMES['xanim'][1]+"...",
+	              command="CoDMayaTools.ShowWindow('xanim')")
+	cmds.menuItem(label=OBJECT_NAMES['xcam'][1]+"...",
+	              command="CoDMayaTools.ShowWindow('xcam')")
 	# Import tools
 	cmds.menuItem(divider=True)
-	cmds.menuItem(label="Import XModel...", subMenu=True)
-	cmds.menuItem(label="...from CoD5", command="CoDMayaTools.ImportXModel('CoD5')")
-	cmds.menuItem(label="...from CoD4", command="CoDMayaTools.ImportXModel('CoD4')")
-	cmds.setParent(menu, menu=True)
-	
-	# Ray's Animation Toolkit
+	cmds.menuItem(label="Import XModel...",
+	              subMenu=True)
+	cmds.menuItem(label="...from CoD7",
+	              command="CoDMayaTools.ImportXModel('CoD7')")
+	cmds.menuItem(label="...from CoD5",
+	              command="CoDMayaTools.ImportXModel('CoD5')")
+	cmds.menuItem(label="...from CoD4",
+	              command="CoDMayaTools.ImportXModel('CoD4')")
+	cmds.setParent(menu,
+	               menu=True)
 	cmds.menuItem(divider=True)
-	cmds.menuItem(label="Ray's Camera Animation Toolkit", subMenu=True)
-	cmds.menuItem(label="Mark as camera", command="CoDMayaTools.setObjectAlias('camera')")
-	cmds.menuItem(label="Mark as weapon", command="CoDMayaTools.setObjectAlias('weapon')")
+	# Utilities Menu
+	util_menu = cmds.menuItem(label="Utilities",
+	                          subMenu=True)
 	cmds.menuItem(divider=True)
-	cmds.menuItem(label="Generate camera animation", command="CoDMayaTools.GenerateCamAnim()")
+	# Rays Animation Toolkit
+	cmds.menuItem(label="Ray's Camera Animation Toolkit",
+	              subMenu=True)
+	cmds.menuItem(label="Mark as camera",
+	              command="CoDMayaTools.setObjectAlias('camera')")
+	cmds.menuItem(label="Mark as weapon",
+	              command="CoDMayaTools.setObjectAlias('weapon')")
 	cmds.menuItem(divider=True)
-	cmds.menuItem(label="Remove camera animation in current range", command=RemoveCameraKeys)
-	cmds.menuItem(label="Reset camera", command=RemoveCameraAnimData)
-	cmds.setParent(menu, menu=True)
-	
+	cmds.menuItem(label="Generate camera animation",
+	              command="CoDMayaTools.GenerateCamAnim()")
+	cmds.menuItem(divider=True)
+	cmds.menuItem(label="Remove camera animation in current range",
+	              command=RemoveCameraKeys)
+	cmds.menuItem(label="Reset camera",
+	              command=RemoveCameraAnimData)
+	cmds.setParent(util_menu,
+	               menu=True)
 	# IWIxDDS
 	cmds.menuItem(divider=True)
-	cmds.menuItem(label="Convert IWI to DDS", command="CoDMayaTools.IWIToDDSUser()")
-	
-	# Root folder
-	cmds.menuItem(divider=True)
-	cmds.menuItem(label="Set Root Folder",  command="CoDMayaTools.SetRootFolder(None, 'CoD5')")
-
+	cmds.menuItem(label="Convert IWI to DDS",
+	              command=lambda x:IWIToDDSUser())
+	# Viewmodel controls submenu
+	cmds.menuItem(label="ViewModel Tools", subMenu=True)
+	cmds.menuItem(label="Create New Gunsleeve Maya File",
+	              command=lambda x:CreateNewGunsleeveMayaFile())
+	cmds.menuItem(label="Create New ViewModel Rig File",
+	              command=lambda x:CreateNewViewmodelRigFile())
+	cmds.menuItem(label="Switch Gun in Current Rig File",
+	              command=lambda x:SwitchGunInCurrentRigFile())
+	cmds.setParent(menu, menu=True)
 	# Settings
 	cmds.menuItem(divider=True)
-	cmds.menuItem(label="Settings", subMenu=True)
-	cmds.menuItem(label="Set Root Folder",  command="CoDMayaTools.SetRootFolder(None, 'CoD5')")
+	settings_menu = cmds.menuItem(label="Settings", subMenu=True)
+	cmds.menuItem(label="Game Settings", subMenu=True)
+	cmds.menuItem(label="Set MW Root Folder",  command="CoDMayaTools.SetRootFolder(None, 'CoD4')")
+	cmds.menuItem(label="Set WaW Root Folder",  command="CoDMayaTools.SetRootFolder(None, 'CoD5')")
+	cmds.menuItem(label="Set Bo1 Root Folder",  command="CoDMayaTools.SetRootFolder(None, 'CoD7')")
+	cmds.menuItem(label="Set Bo3 Root Folder",  command="CoDMayaTools.SetRootFolder(None, 'CoD12')")
 	cmds.menuItem(divider=True)
+	cmds.radioMenuItemCollection()
+	games = GetCurrentGame(True)
+	cmds.menuItem( label="Current Game:")
+	cmds.menuItem( label='CoD MW', radioButton=games["CoD4"], command=lambda x:SetCurrentGame("CoD4"))
+	cmds.menuItem( label='CoD WaW', radioButton=games["CoD5"], command=lambda x:SetCurrentGame("CoD5"))
+	cmds.menuItem( label='CoD Bo1', radioButton=games["CoD7"], command=lambda x:SetCurrentGame("CoD7"))
+	cmds.menuItem( label='CoD Bo3', radioButton=games["CoD12"] , command=lambda x:SetCurrentGame("CoD12"))
+	cmds.setParent(settings_menu, menu=True)	
 	cmds.menuItem("E2B", label='Use ExportX', checkBox=QueryToggableOption('E2B'), command="CoDMayaTools.SetToggableOption('E2B')" )
 	cmds.menuItem(label="Set Path to ExportX", command="CoDMayaTools.SetExport2Bin()")
 	cmds.menuItem(divider=True)
@@ -139,7 +170,7 @@ def CreateMenu():
 	cmds.menuItem(divider=True)
 	cmds.menuItem("CoD1Mode", label='CoD1 Mode', checkBox=QueryToggableOption('CoD1Mode'), command="CoDMayaTools.SetToggableOption('CoD1Mode')" )
 	cmds.menuItem("AutoUpdate", label='Auto Updates', checkBox=QueryToggableOption('AutoUpdate'), command="CoDMayaTools.SetToggableOption('AutoUpdate')" )
-	cmds.menuItem("PrintExport", label='Print xmodel_export information.', checkBox=QueryToggableOption('PrintExport'), command="CoDMayaTools.SetToggableOption('PrintExport')" )
+	# cmds.menuItem("PrintExport", label='Print xmodel_export information.', checkBox=QueryToggableOption('PrintExport'), command="CoDMayaTools.SetToggableOption('PrintExport')" )
 	cmds.setParent(menu, menu=True)
 	cmds.menuItem(divider=True)
 	# For easy script updating
@@ -148,11 +179,47 @@ def CreateMenu():
 	# Tools Info
 	cmds.menuItem(label="About", command="CoDMayaTools.AboutWindow()")
 
-				 
+
+def SetCurrentGame(game=None):
+	if game is None:
+		return
+	try:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
+	except WindowsError:
+		storageKey = reg.CreateKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
+
+	reg.SetValueEx(storageKey, "CurrentGame", 0, reg.REG_SZ, game )
+
+def GetCurrentGame(return_dict=False):
+	games = {
+		"CoD4" : False,
+		"CoD5" : False,
+		"CoD7" : False,
+		"CoD12" : False
+		}
+	try:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
+		game = reg.QueryValueEx(storageKey, "CurrentGame")[0]
+	except WindowsError:
+		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
+		try:
+			reg.SetValueEx(storageKey, "CurrentGame", 0, reg.REG_SZ , 0 ,"CoD12")
+			game = reg.QueryValueEx(storageKey, "CurrentGame")[0]
+		except:
+			return games
+
+	games[game] = True
+	if return_dict:
+		return games
+	else:
+		return game
+
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------- Import Common --------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def ImportFileSelectDialog(codRootPath, type):
+	print(codRootPath)
 	importFrom = None
 	if cmds.about(version=True)[:4] == "2012": # There is a bug in later versions of Maya with the file browser dialog and files with no extension
 		importFrom = cmds.fileDialog2(fileMode=1, fileFilter="%s Files (*)" % type, caption="Import %s" % type, startingDirectory=os.path.join(codRootPath, "raw/%s/" % type.lower()))
@@ -213,7 +280,7 @@ def AutoCapsJointName(name):
 # -------------------------------------------------------------------------- Import XAnim --------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def ImportXAnim(game):
-	codRootPath = GetRootFolder(True, game) # Only call this once, because it might create a dialog box
+	codRootPath = GetRootFolder(None, game) # Only call this once, because it might create a dialog box
 	xanimPath = ImportFileSelectDialog(codRootPath, "XAnim")
 	if not xanimPath:
 		return
@@ -271,7 +338,7 @@ def ImportXAnim(game):
 # -------------------------------------------------------------------------- Import XModel -------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def ImportXModel(game):
-	codRootPath = GetRootFolder() # Only call this once, because it might create a dialog box
+	codRootPath = GetRootFolder(None, game) # Only call this once, because it might create a dialog box
 	xmodelPath = ImportFileSelectDialog(codRootPath, "XModel")
 	if not xmodelPath:
 		return
@@ -289,17 +356,21 @@ def ImportXModel(game):
 		print("Importing XModel '%s'" % os.path.basename(xmodelPath))
 		with open(xmodelPath, "rb") as f:
 			version = f.read(2)
-			if len(version) == 0 or struct.unpack('H', version)[0] != 25:
+			if len(version) == 0 or struct.unpack('H', version)[0] not in SUPPORTED_XMODELS:
 				MessageBox("ERROR: Not a valid XModel file")
-				return
-			
+			print("")
 			if game == "CoD4":
 				f.read(25) # ???
+				ReadNullTerminatedString(f)
 			elif game == "CoD5":
 				f.read(26) # ???
-			
-			ReadNullTerminatedString(f) # ???
-			
+				ReadNullTerminatedString(f)
+			elif game == "CoD7":
+				f.read(28) # ???
+				ReadNullTerminatedString(f)
+				ReadNullTerminatedString(f)
+				f.read(5)
+			print(f.tell())
 			lods = []
 			for i in range(4): # 4 is possible number of lods
 				someInt = struct.unpack('<I', f.read(4))
@@ -307,14 +378,15 @@ def ImportXModel(game):
 				
 				if lodFileName != "":
 					lods.append({"name":lodFileName})
-					
+			
+
 			if len(lods) == 0:
 				MessageBox("ERROR: This XModel has no data (no LOD files)!")
 				return
 				
 			f.read(4) # Spacer if next int isn't 0, otherwise ???
 			count = struct.unpack('<I', f.read(4))[0]
-			print (lods, count)
+			print(count)
 			for i in range(count):
 				subcount = struct.unpack('<I', f.read(4))[0]
 				f.read((subcount * 48) + 36) # ???
@@ -346,19 +418,19 @@ def ImportXModel(game):
 			
 			lodToLoad["materialMaps"] = LoadMaterials(lodToLoad, codRootPath)
 			lodToLoad["joints"] = LoadJoints(lodToLoad, codRootPath)
-			LoadSurfaces(lodToLoad, codRootPath)
+			LoadSurfaces(lodToLoad, codRootPath, game)
 			AutoIKHandles(lodToLoad)
 			cmds.select(lodToLoad["transformGroup"], replace=True)
 	finally:
 		# Delete progress bar
 		cmds.deleteUI(progressWindow, window=True)
 	
-def LoadSurfaces(lod, codRootPath):
+def LoadSurfaces(lod, codRootPath, game):
 	print("Loading XModel surface '%s'" % lod["name"])
 	
 	with open(os.path.join(codRootPath, "raw/xmodelsurfs/%s" % lod["name"]), "rb") as f:
 		version = f.read(2)
-		if len(version) == 0 or struct.unpack('H', version)[0] != 25:
+		if len(version) == 0 or struct.unpack('H', version)[0] not in SUPPORTED_XMODELS:
 			MessageBox("ERROR: Not a valid XModel surface file")
 			return
 		
@@ -378,7 +450,6 @@ def LoadSurfaces(lod, codRootPath):
 			# Read mesh header
 			a = struct.unpack('<B', f.read(1))[0] # ???
 			b = struct.unpack('<H', f.read(2))[0] # ???
-			
 			numVerts = struct.unpack('<H', f.read(2))[0]
 			numTris = struct.unpack('<H', f.read(2))[0]
 			numVerts2 = struct.unpack('<H', f.read(2))[0]
@@ -392,25 +463,36 @@ def LoadSurfaces(lod, codRootPath):
 						pass
 					f.read(2) # ???
 			else:
-				f.read(4) # ???
+				# If a mesh is being influenced by only 1 vert
+				# then it only stores vert. index. with 1.0 
+				# influence.
+				bone = struct.unpack('<I', f.read(4)) # ???
+				single_joint_bind = lod["joints"][bone[0]]["name"]
 			
 			vertexArray = OpenMaya.MFloatPointArray()
 			uArray = OpenMaya.MFloatArray()
 			vArray = OpenMaya.MFloatArray()
 			polygonCounts = OpenMaya.MIntArray(numTris, 3)
 			polygonConnects = OpenMaya.MIntArray()
+			normals = []
 			vertsWeights = []
 			
 			ProgressBarStep()
+
+			bones = []
 			
 			# Read vertices
 			for j in range(numVerts):
-				f.read(12) # ???
-				
+				# f.read(12) # ???
+				normal = struct.unpack('<fff', f.read(12)) # ???
+				normal = OpenMaya.MVector(normal[0], normal[1], normal[2])
 				color = struct.unpack('<BBBB', f.read(4))
 				uv = struct.unpack('<ff', f.read(8))
-				
-				f.read(24) # ???
+				if game == "CoD7":
+					f.read(28)
+				else:
+					f.read(24)
+
 				
 				numWeights = 0
 				finalBoneNumber = 0
@@ -420,34 +502,49 @@ def LoadSurfaces(lod, codRootPath):
 					finalBoneNumber = struct.unpack('<H', f.read(2))[0]
 					
 				pos = struct.unpack('<fff', f.read(12))
-				
 				totalWeight = 0
 				weights = []
 				
 				for k in range(numWeights):
 					weight = struct.unpack('<HH', f.read(4)) # [0] = bone number, [1] = weight mapped to integer (range 0-(2^16))
 					totalWeight += weight[1] / 65536.0
-					weights.append((lod["joints"][weight[0]]["name"], weight[1] / 65536.0))
-				
+					joint = lod["joints"][weight[0]]["name"]
+					weights.append((joint, weight[1] / 65536.0))
+
 				weights.append((lod["joints"][finalBoneNumber]["name"], 1 - totalWeight)) # Final bone gets remaining weight
 				vertsWeights.append(weights)
 				
 				vertexArray.append(pos[0]/CM_TO_INCH, pos[1]/CM_TO_INCH, pos[2]/CM_TO_INCH)
+				normals.append(normal)
 				uArray.append(uv[0])
 				vArray.append(1-uv[1])
 			
 			# Read face indices
+			tris_list = OpenMaya.MIntArray()
+			vert_list = OpenMaya.MIntArray()
+			_normals = OpenMaya.MVectorArray()
 			for j in range(numTris):
 				face = struct.unpack('<HHH', f.read(6))
+				tris_list.append(j)
+				tris_list.append(j)
+				tris_list.append(j)
 				polygonConnects.append(face[0])
-				polygonConnects.append(face[1])
 				polygonConnects.append(face[2])
+				polygonConnects.append(face[1])
+				vert_list.append(face[0])
+				vert_list.append(face[2])
+				vert_list.append(face[1])
+				_normals.append(normals[face[0]])
+				_normals.append(normals[face[2]])
+				_normals.append(normals[face[1]])
+
 			
 			ProgressBarStep()
 			
 			# Create mesh
 			mesh = OpenMaya.MFnMesh()
 			transform = mesh.create(numVerts, numTris, vertexArray, polygonCounts, polygonConnects)
+			mesh.setFaceVertexNormals(_normals, tris_list, vert_list)
 			
 			# UV map
 			mesh.setUVs(uArray, vArray)
@@ -466,10 +563,12 @@ def LoadSurfaces(lod, codRootPath):
 			
 			# Joint weights
 			# TODO: Make this faster!!! Soooo sloowwwwwww
-			skin = cmds.skinCluster(lod["joints"][0]["name"], newPath)[0] # Bind the mesh to the root joint for now
-			for j, vertWeights in enumerate(vertsWeights): 
-				cmds.skinPercent(skin, "%s.vtx[%i]" % (newPath, j), zeroRemainingInfluences=True, transformValue=vertWeights)
-			
+			if physiqued:
+				skin = cmds.skinCluster(lod["joints"][0]["name"], newPath)[0] # Bind the mesh to the root joint for now
+				for j, vertWeights in enumerate(vertsWeights): 
+					cmds.skinPercent(skin, "%s.vtx[%i]" % (newPath, j), zeroRemainingInfluences=True, transformValue=vertWeights)
+			else:
+				skin = cmds.skinCluster(single_joint_bind, newPath,tsb=True, mi=1)[0]
 			ProgressBarStep()	
 				
 			# Apply textures
@@ -499,7 +598,7 @@ def LoadJoints(lod, codRootPath):
 	joints = []
 	with open(os.path.join(codRootPath, "raw/xmodelparts/%s" % lod["name"]), "rb") as f:
 		version = f.read(2)
-		if len(version) == 0 or struct.unpack('H', version)[0] != 25:
+		if len(version) == 0 or struct.unpack('H', version)[0] not in SUPPORTED_XMODELS:
 			MessageBox("ERROR: Not a valid XModel parts file")
 			return
 
@@ -554,7 +653,7 @@ def LoadMaterials(lod, codRootPath):
 	
 	# Create output folder
 	if not os.path.exists(os.path.join(codRootPath, "raw/images/%s/" % lod["name"])):
-		os.mkdir(os.path.join(codRootPath, "raw/images/%s/" % lod["name"]))
+		os.makedirs(os.path.join(codRootPath, "raw/images/%s/" % lod["name"]))
 	
 	# Create material info file
 	infofile = open(os.path.join(codRootPath, "raw/images/%s/%s" % (lod["name"], "%s Material Info.txt" % lod["name"])), "w")
@@ -564,8 +663,13 @@ def LoadMaterials(lod, codRootPath):
 	for material in noDupMaterials:
 		materialMaps = {}
 		# http://www.diegologic.net/diegologic/Programming/CoD4%20Material.html
+		path = os.path.join(codRootPath, "raw/materials/%s" % material)
+		path = os.path.normpath(path)
 		print("Loading material '%s'" % material)
-		with open(os.path.join(codRootPath, "raw/materials/%s" % material), "rb") as f:
+		if not os.path.exists(path):
+			print("Failed loading material, path does not exist.")
+			continue
+		with open(path, "rb") as f:
 			f.read(48) # Skip start of header
 			numMaps = struct.unpack('<H', f.read(2))[0]
 			f.read(14) # Skip the rest of header
@@ -612,7 +716,10 @@ def LoadMaterials(lod, codRootPath):
 				target.close()		
 			
 			if type == "colorMap":
-				IWIToDDS(outPath)
+				try:
+					IWIToDDS(outPath)
+				except:
+					print(traceback.format_exc())
 				
 		ProgressBarStep()
 			
@@ -681,8 +788,13 @@ def LoadMainIWDImages(codRootPath):
 def IWIToDDS(inIWIPath):
 	splitPath = os.path.splitext(inIWIPath)
 	outDDSPath = splitPath[0] + ".dds"
-	
+	supported_headers = [6, 13]
 	print("Converting %s to DDS" % os.path.basename(inIWIPath))
+
+	iwi_data = {}
+	# Offsets are different for V13 IWIs
+	iwi_data[6] = [8, 7]
+	iwi_data[13] = [9, 8]
 	
 	if not os.path.exists(inIWIPath):
 		return False
@@ -694,8 +806,8 @@ def IWIToDDS(inIWIPath):
 			return False
 			
 		header = struct.unpack('<BBBHHBBIIII', inf.read(25))
-		
-		if header[0] != 6: # Make sure the IWI version is 6
+		print("Header Version: %i" % header[0])
+		if header[0] not in supported_headers: # Make sure it's V6 or V13 IWI
 			print("\tERROR: Unsupported IWI version")
 			return False
 		
@@ -710,11 +822,11 @@ def IWIToDDS(inIWIPath):
 		else:
 			print("\tERROR: Unknown image format")
 			return False
-		
+		print("Writing_DDS")
 		with open(outDDSPath, 'wb') as outf:
 			# http://msdn.microsoft.com/en-us/library/windows/desktop/bb943991(v=vs.85).aspx
 			outf.write("DDS ") # File indentifier
-			
+			print("Written that stuff1")
 			# DDS_HEADER				  size, flags, height,	  width,	 pitch, depth, mipmap count
 			outf.write(struct.pack('<7I', 124, 659463, header[4], header[3], 0, 	0, 	   1))
 			outf.write(struct.pack('<11I', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)) # Reserved
@@ -722,23 +834,17 @@ def IWIToDDS(inIWIPath):
 			outf.write(struct.pack('II4s5I', 32, 	4, imageType, 0, 0, 0, 0, 0))
 			# DDS_HEADER			    caps1
 			outf.write(struct.pack('5I', 4198408, 0, 0, 0, 0))
-			
-			# Copy main image data to outfile
-			inf.seek(header[8])
-			outf.write(inf.read(header[7] - header[8]))
-			
-			# For now, don't bother copying the other mipmaps
-			
-			# Copy mipmap 1
-			#inf.seek(header[9])
-			#outf.write(inf.read(header[8] - header[9]))
-			
-			# Copy mipmap 2
-			#inf.seek(header[10])
-			#outf.write(inf.read(header[9] - header[10]))
-			
-			# Copy the rest of the data ???
-			#inf.seek(28)
+			print("Written that stuff")
+			# Copy Images
+			# MIPMAP 0
+			inf.seek(header[iwi_data[header[0]][0]])
+			outf.write(inf.read(header[iwi_data[header[0]][1]] - header[iwi_data[header[0]][0]]))
+			# # MIPMAP 1
+			# inf.seek(header[9])
+			# outf.write(inf.read(header[8] - header[9]))
+			# # MIPMAP 2
+			# inf.seek(header[10])
+			# outf.write(inf.read(header[9] - header[10]))
 			
 	return True
 
@@ -760,26 +866,34 @@ def IWIToDDSUser():
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------				
 # ---------------------------------------------------------------- Export Joints (XModel and XAnim) ----------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
-def GetJointList():
+def GetJointList(export_type=None):
 	# Joints list.
 	joints = []
 	# Try get the cosmetic bone.
-	try:
-		# Get it.
-		cosmeticBone = cmds.getAttr(OBJECT_NAMES["xmodel"][2]+ ".Cosmeticbone").split("|")[-1].split(":")[-1]
-		# Does it exist in scene?
-		if not cmds.objExists(cosmeticBone):
-			# If it doesn't, don't assign a cosmetic bone.
+	if export_type == "xmodel":
+		try:
+			# Get it.
+			cosmeticBone = cmds.getAttr(OBJECT_NAMES["xmodel"][2]+ ".Cosmeticbone").split("|")[-1].split(":")[-1]
+			# Does it exist in scene?
+			if not cmds.objExists(cosmeticBone):
+				# If it doesn't, don't assign a cosmetic bone.
+				cosmeticBone = None
+			else:
+				cosmeticBone = cosmeticBone.split("|")[-1].split(":")[-1]
+		except:
+			# No cosmetic set.
 			cosmeticBone = None
-		else:
-			cosmeticBone = cosmeticBone.split("|")[-1].split(":")[-1]
-	except:
+		# Cosmetic Bones List
+		cosmetic_list = []
+		# Cosmetic Bone ID (for xmodel_export)
+		cosmetic_id = 0
+	else:
 		# No cosmetic set.
 		cosmeticBone = None
-	# Cosmetic Bones List
-	cosmetic_list = []
-	# Cosmetic Bone ID (for xmodel_export)
-	cosmetic_id = 0
+		# Cosmetic Bones List
+		cosmetic_list = []
+		# Cosmetic Bone ID (for xmodel_export)
+		cosmetic_id = 0
 	
 	# Get selected objects
 	selectedObjects = OpenMaya.MSelectionList()
@@ -846,9 +960,9 @@ def GetJointList():
 
 	# Cosmetic bones must be at the end, so append them AFTER we've added other bones.
 	joints = joints + cosmetic_list
-
-	LogExport("Exporting %i joints\n" % len(joints))
-	LogExport("Exporting %i cosmetics." % len(cosmetic_list))
+	if export_type == "xmodel":
+		LogExport("Exporting %i joints\n" % len(joints))
+		LogExport("Exporting %i cosmetics." % len(cosmetic_list))
 
 	return joints, cosmetic_list, cosmetic_id
 
@@ -1530,7 +1644,7 @@ def ExportXAnim(filePath):
 		typex, value, traceback = sys.exc_info()
 		return "Unable to create files:\n\n%s" % value.strerror
 
-	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue=max(1, (frameEnd-1)))
+	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue=frameEnd + 1)
 	
 	# Write header
 	f.write("// Export filename: '%s'\n" % os.path.normpath(filePath))
@@ -1611,7 +1725,7 @@ def ExportXAnim(filePath):
 		try:
 			RunExport2Bin(filePath)
 		except:
-			MessageBox("The animation exported successfully however Export2Bin failed to run, the animation will need to be converted manually.\n\nPlease check your paths.")
+			MessageBox("The animation exported successfully however Export2Bin/ExportX failed to run, the animation will need to be converted manually.\n\nPlease check your paths.")
 	
 def WriteDummyTargetModelBoneRoot(f, numframes):
 	f.write("""
@@ -1828,7 +1942,7 @@ def DoesObjectExist(name, type):
 		
 	return True
 
-def CreateNewGunsleeveMayaFile(required_parameter):
+def CreateNewGunsleeveMayaFile():
 	global WarningsDuringExport
 	
 	# Save reminder
@@ -1899,7 +2013,7 @@ def CreateNewGunsleeveMayaFile(required_parameter):
 	if type(response) != str and type(response) != unicode:
 		MessageBox("Export saved to\n\n" + os.path.normpath(exportPath))
 	
-def CreateNewViewmodelRigFile(required_parameter):
+def CreateNewViewmodelRigFile():
 	# Save reminder
 	if not SaveReminder(False):
 		return
@@ -1928,7 +2042,7 @@ def CreateNewViewmodelRigFile(required_parameter):
 	cmds.parentConstraint(weight=1, name="VMParentConstraint")
 	cmds.select(clear=True)
 	
-def SwitchGunInCurrentRigFile(required_parameter):
+def SwitchGunInCurrentRigFile():
 	# Save reminder
 	if not SaveReminder():
 		return
@@ -2703,7 +2817,9 @@ def GeneralWindow_SaveToField(windowID):
 	cmds.setAttr(OBJECT_NAMES[windowID][2]+(".paths[%i]" % slotIndex), filePath, type='string')
 	
 def GeneralWindow_FileBrowser(windowID, formatExtension):
-	defaultFolder = GetRootFolder()
+	current_game = GetCurrentGame()
+	defaultFolder = GetRootFolder(None, current_game)
+	print(defaultFolder)
 	if windowID == 'xanim':
 		defaultFolder = defaultFolder + 'xanim_export/'
 	elif windowID == 'xcam':
@@ -2908,7 +3024,7 @@ def LogExport(text, isWarning = False):
 			cmds.scrollField("ExportLog", edit = True, insertText = text)
 	
 def AboutWindow():
-	result = cmds.confirmDialog(message="Call of Duty Tools for Maya, created by Aidan Shafran (with assistance from The Internet).\nMaintained by Ray1235 (Maciej Zaremba) & Scobalula\n\nThis script is under the GNU General Public License. You may modify or redistribute this script, however it comes with no warranty. Go to http://www.gnu.org/licenses/ for more details.", button=['OK', 'Visit Forum Topic', 'CoD File Formats'], defaultButton='OK', title="About " + OBJECT_NAMES['menu'][1])
+	result = cmds.confirmDialog(message="Call of Duty Tools for Maya, created by Aidan Shafran (with assistance from The Internet).\nMaintained by Ray1235 (Maciej Zaremba) & Scobalula\n\nThis script is under the GNU General Public License. You may modify or redistribute this script, however it comes with no warranty. Go to http://www.gnu.org/licenses/ for more details.\n\nVersion: 2.6.0", button=['OK', 'Visit Forum Topic', 'CoD File Formats'], defaultButton='OK', title="About " + OBJECT_NAMES['menu'][1])
 	if result == "Visit Forum Topic":
 		GoToForumTopic()
 	elif result == "CoD File Formats":
@@ -3007,12 +3123,9 @@ def SetRootFolder(msg=None, game="none"):
 	if not os.path.isdir(codRootPath):
 		MessageBox("Given root path does not exist")
 		return None
-		
-	# cmds.promptDialog(title="Set Root Path", message=codRootPath)
-	# Set path
-	# , 0, reg.KEY_SET_VALUE)
+
 	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-	reg.SetValueEx(storageKey, "RootPath", 0, reg.REG_SZ, codRootPath)
+	reg.SetValueEx(storageKey, "%sRootPath" % game, 0, reg.REG_SZ, codRootPath)
 	reg.CloseKey(storageKey)
 	
 	return codRootPath
@@ -3027,9 +3140,10 @@ def GetRootFolder(firstTimePrompt=False, game="none"):
 	
 	try:
 		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
-		codRootPath = reg.QueryValueEx(storageKey, "RootPath")[0]
+		codRootPath = reg.QueryValueEx(storageKey, "%sRootPath" % game)[0]
 		reg.CloseKey(storageKey)
 	except WindowsError:
+		print(traceback.format_exc())
 		# First time, create key
 		storageKey = reg.CreateKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
 		reg.SetValueEx(storageKey, "RootPath", 0, reg.REG_SZ, "")
@@ -3342,7 +3456,9 @@ try:
 	reg.CloseKey(storageKey)
 except WindowsError:
 	cmds.confirmDialog(message="It looks like this is your first time running CoD Maya Tools.\nYou will be asked to choose your game's root path.", button=['OK'], defaultButton='OK', title="First time configuration") #MessageBox("Please set your root path before starting to work with CoD Maya Tools")
-	SetRootFolder()
+	result = cmds.confirmDialog(message="Which Game will you be working with? (Can be changed in settings)\n\nCoD4 = MW, CoD5 = WaW, CoD7 = BO1, CoD12 = Bo3", button=['CoD4', "CoD5", "CoD7", "CoD12"], defaultButton='OK', title="First time configuration") #MessageBox("Please set your root path before starting to work with CoD Maya Tools")
+	SetCurrentGame(result)
+	SetRootFolder(None, result)
 	res = cmds.confirmDialog(message="Are you using Export2Bin/ExportX? (only required for Black Ops 3)", button=['Yes', 'No'], defaultButton='No', title="First time configuration")
 	if res == "Yes":
 		SetExport2Bin()
