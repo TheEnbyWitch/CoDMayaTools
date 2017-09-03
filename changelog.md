@@ -1,6 +1,13 @@
 Please check back for updates regularly, if you have an issue that isn't mentioned here/fixed in a recent version please open an issue.
 
 # Changelog
+## VERSION 2.6.0
+* Added Black Ops xModel importing
+* Added Black Ops IWI conversion
+* Added Ability to set specific CoD folders and switch on the fly
+* xModel Imports now take Normals from the model
+* Single Bone Influence Meshes from xModels not binding
+
 ## VERSION 2.5.4
 * Fixed errors with 1 frame animations.
 * Fixed bone-only model exporting.
