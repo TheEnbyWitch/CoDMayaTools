@@ -1252,7 +1252,10 @@ def ExportXModel(filePath):
 		f.write("TRI %i %i 0 0\n" % (face[0], face[1]))
 		for i in range(0, 3):
 			f.write("VERT %i\n" % face[2][i])
-			f.write("NORMAL %f %f %f\n" % (face[5][i].x, face[5][i].y, face[5][i].z))
+			normal = (face[5][i].x, face[5][i].y, face[5][i].z)          
+			if sum([abs(val) for val in normal]) < 0.0000001:
+                		normal = (1.0, 0.0, 0.0)
+			f.write("NORMAL %f %f %f\n" % normal)
 			f.write("COLOR %f %f %f %f\n" % (face[4][i].r, face[4][i].g, face[4][i].b, face[4][i].a))
 			f.write("UV 1 %f %f\n" % (face[3][i][0], face[3][i][1]))
 		ProgressBarStep()
@@ -1816,7 +1819,7 @@ def ExportXCam(filePath):
 	frameStart = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FrameStartField", query=True, value=True)
 	frameEnd = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FrameEndField", query=True, value=True)
 	fps = cmds.intField(OBJECT_NAMES['xcam'][0]+"_FPSField", query=True, value=True)
-	QMultiplier = math.pow(2,cmds.intField(OBJECT_NAMES['xcam'][0]+"_qualityField", query=True, value=True))
+	# QMultiplier = math.pow(2,cmds.intField(OBJECT_NAMES['xcam'][0]+"_qualityField", query=True, value=True))
 	#multiplier = 1/QMultiplier
 	multiplier = 1
 	fps = fps/multiplier;
