@@ -19,7 +19,7 @@
   - [Exporting Models](#exporting-models)
   - [Exporting Animations](#exporting-animations)
   - [Exporting XCAMS](#exporting-xcams)
-  - [Ray's Anim Toolkit](#rays-anim-toolkit)
+  - [Ray's Anim Toolkit](#rays-anim-toolkit)
 - [Cosmetic Bones](#cosmetic-bones)
 
 
@@ -108,8 +108,6 @@ To use Ray's Anim Toolkit:
 2) Select tag_weapon/tag_weapon_right and in the same menu click "Mark as Weapon".
 
 3) Click "Generate Camera Animation".
-
-3) Click "Export Selected".
 
 ## Cosmetic Bones:
 
