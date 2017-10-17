@@ -26,7 +26,7 @@ MAX_WARNINGS_SHOWN = 100
  # Number of slots in the export windows
 EXPORT_WINDOW_NUMSLOTS = 100
  # To export any black vertices as white, set to 'True'. Otherwise, set to 'False'.
-CONVERT_BLACK_VERTS_TO_WHITE = True
+CONVERT_BLACK_VERTS_TO_WHITE = False
 
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ---------------------------------------------------------------------------- Global ------------------------------------------------------------------------------
@@ -596,6 +596,9 @@ def LoadJoints(lod, codRootPath):
 	cmds.window("w"+OBJECT_NAMES['progress'][0], edit=True, title="Loading joints...")
 	
 	joints = []
+	if not os.path.exists(os.path.join(codRootPath, "raw/xmodelparts/%s" % lod["name"])):
+		# cmds.joint("tag_origin", orientation=(0,0,0), position=(0,0,0), relative=True)
+		return
 	with open(os.path.join(codRootPath, "raw/xmodelparts/%s" % lod["name"]), "rb") as f:
 		version = f.read(2)
 		if len(version) == 0 or struct.unpack('H', version)[0] not in SUPPORTED_XMODELS:
@@ -628,7 +631,7 @@ def LoadJoints(lod, codRootPath):
 			ProgressBarStep()
 
 		for i in range(numJoints+1):
-			joints[i]["name"] = AutoCapsJointName(ReadNullTerminatedString(f))
+			joints[i]["name"] = ReadNullTerminatedString(f).lower()
 
 		for joint in joints:
 			if joint["parent"] >= 0: # Select parent
@@ -1149,159 +1152,171 @@ def GetNumInfo(selectedObjects):
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # -------------------------------------------------------------------------- Export XModel -------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
-def ExportXModel(filePath):
-	# Progress bar
-	numSelectedObjects = len(cmds.ls(selection=True))
-	if numSelectedObjects == 0:
-		return "Error: No objects selected for export"
+def ExportXModel(filePath, make_gdt=True):
+    # Progress bar
+    numSelectedObjects = len(cmds.ls(selection=True))
+    if numSelectedObjects == 0:
+        return "Error: No objects selected for export"
 
 
-	# Get data
-	joints = GetJointList()
-#	if len(joints) > 128:
-#		return "Error: More than 128 joints"
-	shapes = GetShapes(joints[0])
-	
-	if type(shapes) == str:
-		return shapes
-	
-	# Open file
-	f = None
-	try:
-		# Create export directory if it doesn't exist
-		directory = os.path.dirname(filePath)
-		if not os.path.exists(directory):
-			os.makedirs(directory)
-		
-		# Create file
-		f = open(filePath, 'w')
-	except (IOError, OSError) as e:
-		typex, value, traceback = sys.exc_info()
-		return "Unable to create file:\n\n%s" % value.strerror
-	
-	# Write header
-	LogExport("\n\nWriting header.\n")
-	f.write("// Export filename: '%s'\n" % os.path.normpath(filePath))
-	if cmds.file(query=True, exists=True):
-		f.write("// Source filename: '%s'\n" % os.path.normpath(os.path.abspath(cmds.file(query=True, sceneName=True))).encode('ascii', 'ignore')) # Ignore Ascii characters using .encode()
-	else:
-		f.write("// Source filename: Unsaved\n")
-	f.write("// Export time: %s\n\n" % datetime.datetime.now().strftime("%a %b %d %Y, %H:%M:%S")) 
-	f.write("MODEL\n")
+    # Get data
+    joints = GetJointList()
+    #	if len(joints) > 128:
+    #		return "Error: More than 128 joints"
+    shapes = GetShapes(joints[0])
 
-	if QueryToggableOption("CoD1Mode"):
-		LogExport("Exporing Version 5 File\n")
-		f.write("VERSION 5\n\n")
-	else:
-		LogExport("Exporing Version 6 File\n")
-		f.write("VERSION 6\n\n")
-	
-	# Write joints
-	LogExport("Writing %i joints.\n" % len(joints[0]))
-	if len(joints[0]) == 0:
-		LogExport("No joints selected; exporting with a default TAG_ORIGIN.\n")
-		print "No joints selected; exporting with a default TAG_ORIGIN."
-		f.write("NUMBONES 1\n")
-		f.write("BONE 0 -1 \"TAG_ORIGIN\"\n\n")
-		
-		f.write("BONE 0\n")
-		f.write("OFFSET 0.000000 0.000000 0.000000\n")
-		f.write("SCALE 1.000000 1.000000 1.000000\n")
-		f.write("X 1.000000 0.000000 0.000000\n")
-		f.write("Y 0.000000 1.000000 0.000000\n")
-		f.write("Z 0.000000 0.000000 1.000000\n")
-	else:
-		LogExport("Writing NUMBONES\n")
-		f.write("NUMBONES %i\n" % len(joints[0]))
-		if len(joints[1]) > 0:
-			LogExport("Writing NUMCOSMETICS\n")
-			# NUMCOSMETICS COUNT PARENTID
-			f.write("NUMCOSMETICS %i %i\n" % (len(joints[1]), joints[2]) )
-		LogExport("Writing Bone table.\n")
-		for i, joint in enumerate(joints[0]):
-			f.write("BONE %i %i \"%s\"\n" % (i, joint[0], joint[1]))
-		LogExport("Writing Bone Information.\n")
-		for i, joint in enumerate(joints[0]):
-			f.write("\nBONE %i\n" % i)
-			WriteJointData(f, joint[2])
+    if type(shapes) == str:
+        return shapes
 
-	# Write verts
-	LogExport("Writing vert data.\n")
-	if len(shapes["verts"]) > 65536:
-		LogExport("> 65536 verts, use EXPORTX to convert to XMODEL_BIN, will not work in older games.\n")
-	f.write("\nNUMVERTS %i\n" % len(shapes["verts"]))
-	for i, vert in enumerate(shapes["verts"]):
-		f.write("VERT %i\n" % i)
-		if QueryToggableOption("CoD1Mode"):
-			f.write("OFFSET %f %f %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
-		else:
-			f.write("OFFSET %f, %f, %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
-		f.write("BONES %i\n" % max(len(vert[1]), 1))
-		if len(vert[1]) > 0:
-			for bone in vert[1]:
-				f.write("BONE %i %f\n" % (bone[0], bone[1]))
-		else:
-			f.write("BONE 0 1.000000\n")
-		ProgressBarStep()
-		f.write("\n")
-	
-	# Write faces
-	LogExport("Writing face data.\n")
-	f.write("NUMFACES %i\n" % len(shapes["faces"]))
-	for j, face in enumerate(shapes["faces"]):
-		f.write("TRI %i %i 0 0\n" % (face[0], face[1]))
-		for i in range(0, 3):
-			f.write("VERT %i\n" % face[2][i])
-			normal = (face[5][i].x, face[5][i].y, face[5][i].z)          
-			if sum([abs(val) for val in normal]) < 0.0000001:
-                		normal = (1.0, 0.0, 0.0)
-			f.write("NORMAL %f %f %f\n" % normal)
-			f.write("COLOR %f %f %f %f\n" % (face[4][i].r, face[4][i].g, face[4][i].b, face[4][i].a))
-			f.write("UV 1 %f %f\n" % (face[3][i][0], face[3][i][1]))
-		ProgressBarStep()
-		f.write("\n")
-	
-	# Write objects
-	LogExport("Writing meshes/objects.\n")
-	f.write("NUMOBJECTS %i\n" % len(shapes["meshes"]))
-	for i, object in enumerate(shapes["meshes"]):
-		f.write("OBJECT %i \"%s\"\n" % (i, object.split(":")[-1]))
-	
-	# Write materials
-	LogExport("Writing materials.\n")
-	f.write("\nNUMMATERIALS %i\n" % len(shapes["materials"]))
-	for i, material in enumerate(shapes["materials"]):
-		if QueryToggableOption("CoD1Mode"):
-			f.write("MATERIAL %i \"%s\"\n" % (i, material[0].split(":")[-1]))
-		else:
-			f.write("MATERIAL %i \"%s\" \"%s\" \"%s\"\n" % (i, material[0].split(":")[-1], "Lambert", material[1]))
-		
-			# According to the Modrepository page on the XModel format, the following values don't matter
-			f.write("COLOR 0.000000 0.000000 0.000000 1.000000\n"
-					"TRANSPARENCY 0.000000 0.000000 0.000000 1.000000\n"
-					"AMBIENTCOLOR 0.000000 0.000000 0.000000 1.000000\n"
-					"INCANDESCENCE 0.000000 0.000000 0.000000 1.000000\n"
-					"COEFFS 0.800000 0.000000\n"
-					"GLOW 0.000000 0\n"
-					"REFRACTIVE 6 1.000000\n"
-					"SPECULARCOLOR -1.000000 -1.000000 -1.000000 1.000000\n"
-					"REFLECTIVECOLOR -1.000000 -1.000000 -1.000000 1.000000\n"
-					"REFLECTIVE -1 -1.000000\n"
-					"BLINN -1.000000 -1.000000\n"
-					"PHONG -1.000000\n\n")
-		
-	f.close()
-	ProgressBarStep()
-	ProgressBarStep()
-	cmds.refresh()
+    # Open file
+    f = None
+    try:
+        # Create export directory if it doesn't exist
+        directory = os.path.dirname(filePath)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        
+        # Create file
+        f = open(filePath, 'w')
+    except (IOError, OSError) as e:
+        typex, value, traceback = sys.exc_info()
+        return "Unable to create file:\n\n%s" % value.strerror
 
-	if QueryToggableOption('E2B'):
-		LogExport("Converting to XMODEL_BIN\n")
-		try:
-			RunExport2Bin(filePath)
-		except:
-			MessageBox("The model exported successfully however Export2Bin failed to run, the model will need to be converted manually.\n\nPlease check your paths.")
-	LogExport("\nFile Exported, close window when ready.\n")
+    # Write header
+    LogExport("\n\nWriting header.\n")
+    f.write("// Export filename: '%s'\n" % os.path.normpath(filePath))
+    if cmds.file(query=True, exists=True):
+        f.write("// Source filename: '%s'\n" % os.path.normpath(os.path.abspath(cmds.file(query=True, sceneName=True))).encode('ascii', 'ignore')) # Ignore Ascii characters using .encode()
+    else:
+        f.write("// Source filename: Unsaved\n")
+    f.write("// Export time: %s\n\n" % datetime.datetime.now().strftime("%a %b %d %Y, %H:%M:%S")) 
+    f.write("MODEL\n")
+
+    if QueryToggableOption("CoD1Mode"):
+        LogExport("Exporing Version 5 File\n")
+        f.write("VERSION 5\n\n")
+    else:
+        LogExport("Exporing Version 6 File\n")
+        f.write("VERSION 6\n\n")
+
+    # Write joints
+    LogExport("Writing %i joints.\n" % len(joints[0]))
+    if len(joints[0]) == 0:
+        LogExport("No joints selected; exporting with a default TAG_ORIGIN.\n")
+        print "No joints selected; exporting with a default TAG_ORIGIN."
+        f.write("NUMBONES 1\n")
+        f.write("BONE 0 -1 \"TAG_ORIGIN\"\n\n")
+        
+        f.write("BONE 0\n")
+        f.write("OFFSET 0.000000 0.000000 0.000000\n")
+        f.write("SCALE 1.000000 1.000000 1.000000\n")
+        f.write("X 1.000000 0.000000 0.000000\n")
+        f.write("Y 0.000000 1.000000 0.000000\n")
+        f.write("Z 0.000000 0.000000 1.000000\n")
+    else:
+        LogExport("Writing NUMBONES\n")
+        f.write("NUMBONES %i\n" % len(joints[0]))
+        if len(joints[1]) > 0:
+            LogExport("Writing NUMCOSMETICS\n")
+            # NUMCOSMETICS COUNT PARENTID
+            f.write("NUMCOSMETICS %i %i\n" % (len(joints[1]), joints[2]) )
+        LogExport("Writing Bone table.\n")
+        for i, joint in enumerate(joints[0]):
+            f.write("BONE %i %i \"%s\"\n" % (i, joint[0], joint[1]))
+        LogExport("Writing Bone Information.\n")
+        for i, joint in enumerate(joints[0]):
+            f.write("\nBONE %i\n" % i)
+            WriteJointData(f, joint[2])
+
+    # Write verts
+    LogExport("Writing vert data.\n")
+    if len(shapes["verts"]) > 65536:
+        LogExport("> 65536 verts, use EXPORTX to convert to XMODEL_BIN, will not work in older games.\n")
+    f.write("\nNUMVERTS %i\n" % len(shapes["verts"]))
+    for i, vert in enumerate(shapes["verts"]):
+        f.write("VERT %i\n" % i)
+        if QueryToggableOption("CoD1Mode"):
+            f.write("OFFSET %f %f %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
+        else:
+            f.write("OFFSET %f, %f, %f\n" % (vert[0].x*CM_TO_INCH, vert[0].y*CM_TO_INCH, vert[0].z*CM_TO_INCH)) # Offsets are stored in CM, but cod uses inches
+        f.write("BONES %i\n" % max(len(vert[1]), 1))
+        if len(vert[1]) > 0:
+            for bone in vert[1]:
+                f.write("BONE %i %f\n" % (bone[0], bone[1]))
+        else:
+            f.write("BONE 0 1.000000\n")
+        ProgressBarStep()
+        f.write("\n")
+
+    # Write faces
+    LogExport("Writing face data.\n")
+    f.write("NUMFACES %i\n" % len(shapes["faces"]))
+    for j, face in enumerate(shapes["faces"]):
+        f.write("TRI %i %i 0 0\n" % (face[0], face[1]))
+        for i in range(0, 3):
+            f.write("VERT %i\n" % face[2][i])
+            normal = (face[5][i].x, face[5][i].y, face[5][i].z)          
+            if sum([abs(val) for val in normal]) < 0.0000001:
+                normal = (1.0, 0.0, 0.0)
+            f.write("NORMAL %f %f %f\n" % normal)
+            f.write("COLOR %f %f %f %f\n" % (face[4][i].r, face[4][i].g, face[4][i].b, face[4][i].a))
+            f.write("UV 1 %f %f\n" % (face[3][i][0], face[3][i][1]))
+        ProgressBarStep()
+        f.write("\n")
+
+    # Write objects
+    LogExport("Writing meshes/objects.\n")
+    f.write("NUMOBJECTS %i\n" % len(shapes["meshes"]))
+    for i, object in enumerate(shapes["meshes"]):
+        f.write("OBJECT %i \"%s\"\n" % (i, object.split(":")[-1]))
+
+    # Write materials
+    LogExport("Writing materials.\n")
+    f.write("\nNUMMATERIALS %i\n" % len(shapes["materials"]))
+    for i, material in enumerate(shapes["materials"]):
+        if QueryToggableOption("CoD1Mode"):
+            f.write("MATERIAL %i \"%s\"\n" % (i, material[0].split(":")[-1]))
+        else:
+            f.write("MATERIAL %i \"%s\" \"%s\" \"%s\"\n" % (i, material[0].split(":")[-1], "Lambert", material[1]))
+        
+            # According to the Modrepository page on the XModel format, the following values don't matter
+            f.write("COLOR 0.000000 0.000000 0.000000 1.000000\n"
+                    "TRANSPARENCY 0.000000 0.000000 0.000000 1.000000\n"
+                    "AMBIENTCOLOR 0.000000 0.000000 0.000000 1.000000\n"
+                    "INCANDESCENCE 0.000000 0.000000 0.000000 1.000000\n"
+                    "COEFFS 0.800000 0.000000\n"
+                    "GLOW 0.000000 0\n"
+                    "REFRACTIVE 6 1.000000\n"
+                    "SPECULARCOLOR -1.000000 -1.000000 -1.000000 1.000000\n"
+                    "REFLECTIVECOLOR -1.000000 -1.000000 -1.000000 1.000000\n"
+                    "REFLECTIVE -1 -1.000000\n"
+                    "BLINN -1.000000 -1.000000\n"
+                    "PHONG -1.000000\n\n")
+        
+    f.close()
+    ProgressBarStep()
+    ProgressBarStep()
+    cmds.refresh()
+    if QueryToggableOption('E2B'):
+        LogExport("Converting to XMODEL_BIN\n")
+        try:
+            RunExport2Bin(filePath)
+        except:
+            MessageBox("The model exported successfully however Export2Bin failed to run, the model will need to be converted manually.\n\nPlease check your paths.")
+    LogExport("\nFile Exported, close window when ready.\n")
+
+    # if make_gdt:
+    #     make_xmodel_gdt(filePath, shapes["materials"])
+
+def make_xmodel_gdt(xmodel_path, xmodel_materials):
+    textures = {}
+
+    gdt_path = os.path.splitext(xmodel_path)[0] + ".gdt"
+    xmodel = os.path.basename(xmodel_path)
+
+    with open(gdt_path, "w"):
+        pass
+
 def GetMaterialsFromMesh(mesh, dagPath):
 	textures = {}
 	
@@ -1370,237 +1385,244 @@ def VerticesObjRelToLocalRel(vertexIndices, toConvertVertexIndices):
 	return localVertexIndices
 		
 def GetShapes(joints):
-	LogExport("Beginning Export...\n")
-	# Vars
-	meshes = []
-	verts = []
-	tris = []
-	materialDict = {}
-	materials = []
-	
-	# Convert the joints to a dictionary, for simple searching for joint indices
-	jointDict = {}
-	for i, joint in enumerate(joints):
-		jointDict[joint[2].partialPathName()] = i
-	
-	# Get all selected objects
-	selectedObjects = OpenMaya.MSelectionList()
-	OpenMaya.MGlobal.getActiveSelectionList(selectedObjects)
-	
-	# The global vert index at the start of each object
-	currentStartingVertIndex = 0
+    LogExport("Beginning Export...\n")
+    # Vars
+    meshes = []
+    verts = []
+    tris = []
+    materialDict = {}
+    materials = []
+
+    # Convert the joints to a dictionary, for simple searching for joint indices
+    jointDict = {}
+    for i, joint in enumerate(joints):
+        jointDict[joint[2].partialPathName()] = i
+
+    # Get all selected objects
+    selectedObjects = OpenMaya.MSelectionList()
+    OpenMaya.MGlobal.getActiveSelectionList(selectedObjects)
+
+    # The global vert index at the start of each object
+    currentStartingVertIndex = 0
 
 
-	progressInfo = GetNumInfo(selectedObjects)
+    progressInfo = GetNumInfo(selectedObjects)
 
-	if progressInfo == 0:
-		return "No info to export."
+    if progressInfo == 0:
+        return "No info to export."
 
-	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue = progressInfo)
-	
-	# Loop through all objects
-	for i in range(0, selectedObjects.length()):
-		# Get data on object
-		object = OpenMaya.MObject()
-		dagPath = OpenMaya.MDagPath()
-		selectedObjects.getDependNode(i, object)
-		selectedObjects.getDagPath(i, dagPath)
-		
-		# Ignore dag nodes that aren't shapes or shape transforms
-		if not dagPath.hasFn(OpenMaya.MFn.kMesh):
-			continue
-		
-		# Lower path to shape node
-		# Selecting a shape transform or shape will get the same dagPath to the shape using this
-		dagPath.extendToShape()
-		
-		# Check for duplicates
-		if dagPath.partialPathName() in meshes:
-			continue
-		
-		# Add shape to list
-		meshes.append(dagPath.partialPathName())
-		
-		# Get mesh
-		mesh = OpenMaya.MFnMesh(dagPath)
-		
-		# Get skin cluster
-		clusterName = mel.eval("findRelatedSkinCluster " + dagPath.partialPathName()) # I couldn't figure out how to get the skin cluster via the API
-		hasSkin = False
-		if clusterName != None and clusterName != "" and not clusterName.isspace():
-			hasSkin = True
-			selList = OpenMaya.MSelectionList()
-			selList.add(clusterName)
-			clusterNode = OpenMaya.MObject()
-			selList.getDependNode(0, clusterNode)
-			skin = OpenMayaAnim.MFnSkinCluster(clusterNode)
-		
-		# Loop through all vertices
-		vertIter = OpenMaya.MItMeshVertex(dagPath)
-		# - Log Export - 
-		LogExport("\nGrabbing mesh information from %s.\n" % dagPath.partialPathName())	
-		LogExport("Grabbing verts from %s\n" % dagPath.partialPathName())	
-		# - Log Export - 
-		vertGetTime = time.time()
-		while not vertIter.isDone():
-			if not hasSkin:
-				verts.append((vertIter.position(OpenMaya.MSpace.kWorld), []))
-				vertIter.next()
-				continue
-			
-			# Get weight values
-			weightValues = OpenMaya.MDoubleArray()
-			numWeights = OpenMaya.MScriptUtil() # Need this because getWeights crashes without being passed a count
-			skin.getWeights(dagPath, vertIter.currentItem(), weightValues, numWeights.asUintPtr())
-			
-			# Get weight names
-			weightJoints = OpenMaya.MDagPathArray()
-			skin.influenceObjects(weightJoints)
-			
-			# Make sure the list of weight values and names match
-			if weightValues.length() != weightJoints.length():
-						# - Log Export - 
-				LogExport("Failed to retrieve vertex weight list on '%s.vtx[%d]'; using default joints.\n" % (dagPath.partialPathName(), vertIter.index()), True)	
-				PrintWarning("Failed to retrieve vertex weight list on '%s.vtx[%d]'; using default joints." % (dagPath.partialPathName(), vertIter.index()))
-			
-			# Remove weights of value 0 or weights from unexported joints
-			finalWeights = []
-			weightsSize = 0
-			for i in range(0, weightJoints.length()):
-				if weightValues[i] < 0.000001: # 0.000001 is the smallest decimal in xmodel exports
-					continue
-				jointName = weightJoints[i].partialPathName()
-				if not jointName in jointDict:
-					LogExport("Unexported joint %s is influencing vertex '%s.vtx[%d]' by %f%%\n" % (("'%s'" % jointName).ljust(15), dagPath.partialPathName(), vertIter.index(), weightValues[i]*100), True)
-					PrintWarning("Unexported joint %s is influencing vertex '%s.vtx[%d]' by %f%%\n" % (("'%s'" % jointName).ljust(15), dagPath.partialPathName(), vertIter.index(), weightValues[i]*100))
-				else:
-					finalWeights.append([jointDict[jointName], weightValues[i]])
-					weightsSize += weightValues[i]
-			
-			# Make sure the total weight adds up to 1
-			if weightsSize > 0:
-				weightMultiplier = 1 / weightsSize
-				for weight in finalWeights:
-					weight[1] *= weightMultiplier
-			
-			verts.append((
-				vertIter.position(OpenMaya.MSpace.kWorld), # XYZ position
-				finalWeights # List of weights
-			))
-			
-			# Next vert
-			ProgressBarStep()
-			vertIter.next()
-		# - Log Export - 
-		LogExport("Grabbed %i verts from %s in %s seconds.\n" % (vertIter.count(), dagPath.partialPathName(), time.time() - vertGetTime))	
-		# - Log Export - 
-		# Get materials used by this mesh
-		meshMaterials = GetMaterialsFromMesh(mesh, dagPath)
+    cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue = progressInfo)
 
-		
-		
-		# Loop through all faces
-		polyIter = OpenMaya.MItMeshPolygon(dagPath)
-		currentObjectVertexOffset = 0
-		# - Log Export - 
-		LogExport("Grabbing faces from %s\n" % dagPath.partialPathName())	
-		faceGetTime = time.time()
-		# - Log Export - 
-		while not polyIter.isDone():
-			# Get this poly's material
-			polyMaterial = meshMaterials[polyIter.index()]
-			
-			# Every face must have a material
-			if polyMaterial == None:
-				PrintWarning("Found no material on face '%s.f[%d]'; ignoring face" % (dagPath.partialPathName(), polyIter.index()))
-				polyIter.next()
-				continue
-			
-			# Add this poly's material to the global list of used materials
-			if not polyMaterial[0] in materialDict:
-				materialDict[polyMaterial[0]] = len(materials)
-				materials.append(polyMaterial)
-			
-			# Get vertex indices of this poly, and the vertex indices of this poly's triangles
-			trianglePoints = OpenMaya.MPointArray()
-			triangleIndices = OpenMaya.MIntArray()
-			vertexIndices = OpenMaya.MIntArray()
-			polyIter.getTriangles(trianglePoints, triangleIndices)
-			polyIter.getVertices(vertexIndices)
-			
-			# localTriangleIndices is the same as triangleIndices, except each vertex is listed as the face-relative index intead of the object-realtive index
-			localTriangleIndices = VerticesObjRelToLocalRel(vertexIndices, triangleIndices)
-			if localTriangleIndices == False:
-				return "Failed to convert object-relative vertices to face-relative on poly '%s.f[%d]'" % (dagPath.partialPathName(), polyIter.index())
-			
-			# Note: UVs, normals, and colors, are "per-vertex per face", because even though two faces may share
-			# a vertex, they might have different UVs, colors, or normals. So, each face has to contain this info
-			# for each of it's vertices instead of each vertex alone
-			Us = OpenMaya.MFloatArray()
-			Vs = OpenMaya.MFloatArray()
-			normals = OpenMaya.MVectorArray()
-			polyIter.getUVs(Us, Vs)
-			polyIter.getNormals(normals, OpenMaya.MSpace.kWorld)
-			
-			# Add each triangle in this poly to the global face list
-			for i in range(triangleIndices.length()/3): # vertexIndices.length() has 3 values per triangle
-				# Put local indices into an array for easy access
-				locals = [localTriangleIndices[i*3], localTriangleIndices[i*3+1], localTriangleIndices[i*3+2]]
-				
-				# Using polyIter.getColors() doesn't always work - sometimes values in the return array would
-				# be valid Python objects, but when used they would cause Maya to completely crash. No idea
-				# why that happens, but getting the colors individually fixed the problem.
-				vert0Color = OpenMaya.MColor()
-				vert1Color = OpenMaya.MColor()
-				vert2Color = OpenMaya.MColor()
-				polyIter.getColor(vert0Color, locals[0])
-				polyIter.getColor(vert1Color, locals[1])
-				polyIter.getColor(vert2Color, locals[2])
-				
-				# Make sure it has color
-				if CONVERT_BLACK_VERTS_TO_WHITE:
-					if vert0Color == OpenMaya.MColor(0,0,0):
-						vert0Color = OpenMaya.MColor(1,1,1)
-					if vert1Color == OpenMaya.MColor(0,0,0):
-						vert1Color = OpenMaya.MColor(1,1,1)
-					if vert2Color == OpenMaya.MColor(0,0,0):
-						vert2Color = OpenMaya.MColor(1,1,1)
-				elif vert0Color == OpenMaya.MColor(0,0,0) or vert1Color == OpenMaya.MColor(0,0,0) or vert2Color == OpenMaya.MColor(0,0,0):
-					PrintWarning("A color on face '%s.f[%d]' is 0" % (dagPath.partialPathName(), polyIter.index()))
-					
-				# Note: Vertices are in 0,2,1 order to make CoD happy
-				tris.append((
-					len(meshes)-1, # Shape index
-					materialDict[polyMaterial[0]], # Matertial index 
-					(currentStartingVertIndex + triangleIndices[i*3], currentStartingVertIndex + triangleIndices[i*3+2], currentStartingVertIndex + triangleIndices[i*3+1]), # Vert indices
-					((Us[locals[0]], 1-Vs[locals[0]]),		(Us[locals[2]], 1-Vs[locals[2]]),		(Us[locals[1]], 1-Vs[locals[1]])),	  # UVs
-					(vert0Color, 							vert2Color,								vert1Color),  		  				  # Colors
-					(OpenMaya.MVector(normals[locals[0]]),	OpenMaya.MVector(normals[locals[2]]),	OpenMaya.MVector(normals[locals[1]])) # Normals; Must copy the normals into a new container, because the original is destructed at the end of this poltIter iteration.
-				))
-			
-			# Next poly
-			ProgressBarStep()
-			polyIter.next()
+    # Loop through all objects
+    for i in range(0, selectedObjects.length()):
+        # Get data on object
+        object = OpenMaya.MObject()
+        dagPath = OpenMaya.MDagPath()
+        selectedObjects.getDependNode(i, object)
+        selectedObjects.getDagPath(i, dagPath)
+        
+        # Ignore dag nodes that aren't shapes or shape transforms
+        if not dagPath.hasFn(OpenMaya.MFn.kMesh):
+            continue
+        
+        # Lower path to shape node
+        # Selecting a shape transform or shape will get the same dagPath to the shape using this
+        dagPath.extendToShape()
+        
+        # Check for duplicates
+        if dagPath.partialPathName() in meshes:
+            continue
+        
+        # Add shape to list
+        meshes.append(dagPath.partialPathName())
+        
+        # Get mesh
+        mesh = OpenMaya.MFnMesh(dagPath)
+        
+        # Get skin cluster
+        clusterName = mel.eval("findRelatedSkinCluster " + dagPath.partialPathName()) # I couldn't figure out how to get the skin cluster via the API
+        hasSkin = False
+        if clusterName != None and clusterName != "" and not clusterName.isspace():
+            hasSkin = True
+            selList = OpenMaya.MSelectionList()
+            selList.add(clusterName)
+            clusterNode = OpenMaya.MObject()
+            selList.getDependNode(0, clusterNode)
+            skin = OpenMayaAnim.MFnSkinCluster(clusterNode)
+        
+        # Loop through all vertices
+        vertIter = OpenMaya.MItMeshVertex(dagPath)
+        # - Log Export - 
+        LogExport("\nGrabbing mesh information from %s.\n" % dagPath.partialPathName())	
+        LogExport("Grabbing verts from %s\n" % dagPath.partialPathName())	
+        # - Log Export - 
+        vertGetTime = time.time()
+        while not vertIter.isDone():
+            if not hasSkin:
+                verts.append((vertIter.position(OpenMaya.MSpace.kWorld), []))
+                vertIter.next()
+                continue
+            
+            # Get weight values
+            weightValues = OpenMaya.MDoubleArray()
+            numWeights = OpenMaya.MScriptUtil() # Need this because getWeights crashes without being passed a count
+            skin.getWeights(dagPath, vertIter.currentItem(), weightValues, numWeights.asUintPtr())
+            
+            # Get weight names
+            weightJoints = OpenMaya.MDagPathArray()
+            skin.influenceObjects(weightJoints)
+            
+            # Make sure the list of weight values and names match
+            if weightValues.length() != weightJoints.length():
+                        # - Log Export - 
+                LogExport("Failed to retrieve vertex weight list on '%s.vtx[%d]'; using default joints.\n" % (dagPath.partialPathName(), vertIter.index()), True)	
+                PrintWarning("Failed to retrieve vertex weight list on '%s.vtx[%d]'; using default joints." % (dagPath.partialPathName(), vertIter.index()))
+            
+            # Remove weights of value 0 or weights from unexported joints
+            finalWeights = []
+            weightsSize = 0
+            for i in range(0, weightJoints.length()):
+                if weightValues[i] < 0.000001: # 0.000001 is the smallest decimal in xmodel exports
+                    continue
+                jointName = weightJoints[i].partialPathName()
+                if not jointName in jointDict:
+                    LogExport("Unexported joint %s is influencing vertex '%s.vtx[%d]' by %f%%\n" % (("'%s'" % jointName).ljust(15), dagPath.partialPathName(), vertIter.index(), weightValues[i]*100), True)
+                    PrintWarning("Unexported joint %s is influencing vertex '%s.vtx[%d]' by %f%%\n" % (("'%s'" % jointName).ljust(15), dagPath.partialPathName(), vertIter.index(), weightValues[i]*100))
+                else:
+                    finalWeights.append([jointDict[jointName], weightValues[i]])
+                    weightsSize += weightValues[i]
+            
+            # Make sure the total weight adds up to 1
+            if weightsSize > 0:
+                weightMultiplier = 1 / weightsSize
+                for weight in finalWeights:
+                    weight[1] *= weightMultiplier
+            
+            verts.append((
+                vertIter.position(OpenMaya.MSpace.kWorld), # XYZ position
+                finalWeights # List of weights
+            ))
+            
+            # Next vert
+            ProgressBarStep()
+            vertIter.next()
+        # - Log Export - 
+        LogExport("Grabbed %i verts from %s in %s seconds.\n" % (vertIter.count(), dagPath.partialPathName(), time.time() - vertGetTime))	
+        # - Log Export - 
+        # Get materials used by this mesh
+        meshMaterials = GetMaterialsFromMesh(mesh, dagPath)
 
-		# - Log Export - 
-		LogExport("Grabbed %i faces from %s in %s seconds.\n" % (polyIter.count(), dagPath.partialPathName(), time.time() - faceGetTime))	
-		# - Log Export - 
-		
-		# Update starting vertex index
-		currentStartingVertIndex = len(verts)
-		
-	# Error messages
-	if len(meshes) == 0:
-		print "No meshes selected to export."
-	if len(verts) == 0:
-		print "No vertices found in selected meshes."
-	if len(tris) == 0:
-		print "No faces found in selected meshes."
-	if len(materials) == 0:
-		print "No materials found on the selected meshes."
-		
-	# Done!
-	return {"meshes": meshes, "verts": verts, "faces": tris, "materials": materials}
+        
+        
+        # Loop through all faces
+        polyIter = OpenMaya.MItMeshPolygon(dagPath)
+        currentObjectVertexOffset = 0
+        # - Log Export - 
+        LogExport("Grabbing faces from %s\n" % dagPath.partialPathName())	
+        faceGetTime = time.time()
+        global WarningsDuringExport
+        WarningsDuringExport = 0
+        # - Log Export - 
+        while not polyIter.isDone():
+            # Get this poly's material
+            polyMaterial = meshMaterials[polyIter.index()]
+            
+            # Every face must have a material
+            if polyMaterial == None:
+                PrintWarning("Found no material on face '%s.f[%d]'; ignoring face" % (dagPath.partialPathName(), polyIter.index()))
+                polyIter.next()
+                continue
+            
+            # Add this poly's material to the global list of used materials
+            if not polyMaterial[0] in materialDict:
+                materialDict[polyMaterial[0]] = len(materials)
+                materials.append(polyMaterial)
+            
+            # Get vertex indices of this poly, and the vertex indices of this poly's triangles
+            trianglePoints = OpenMaya.MPointArray()
+            triangleIndices = OpenMaya.MIntArray()
+            vertexIndices = OpenMaya.MIntArray()
+            polyIter.getTriangles(trianglePoints, triangleIndices)
+            polyIter.getVertices(vertexIndices)
+            
+            # localTriangleIndices is the same as triangleIndices, except each vertex is listed as the face-relative index intead of the object-realtive index
+            localTriangleIndices = VerticesObjRelToLocalRel(vertexIndices, triangleIndices)
+            if localTriangleIndices == False:
+                return "Failed to convert object-relative vertices to face-relative on poly '%s.f[%d]'" % (dagPath.partialPathName(), polyIter.index())
+            
+            # Note: UVs, normals, and colors, are "per-vertex per face", because even though two faces may share
+            # a vertex, they might have different UVs, colors, or normals. So, each face has to contain this info
+            # for each of it's vertices instead of each vertex alone
+            Us = OpenMaya.MFloatArray()
+            Vs = OpenMaya.MFloatArray()
+            normals = OpenMaya.MVectorArray()
+            try:
+                polyIter.getUVs(Us, Vs)
+            except:
+                PrintWarning("Failed to aquire UVs on face '%s.f[%d]'; ignoring face" % (dagPath.partialPathName(), polyIter.index()))                
+                polyIter.next()
+                continue
+            polyIter.getNormals(normals, OpenMaya.MSpace.kWorld)
+            
+            # Add each triangle in this poly to the global face list
+            for i in range(triangleIndices.length()/3): # vertexIndices.length() has 3 values per triangle
+                # Put local indices into an array for easy access
+                locals = [localTriangleIndices[i*3], localTriangleIndices[i*3+1], localTriangleIndices[i*3+2]]
+                
+                # Using polyIter.getColors() doesn't always work - sometimes values in the return array would
+                # be valid Python objects, but when used they would cause Maya to completely crash. No idea
+                # why that happens, but getting the colors individually fixed the problem.
+                vert0Color = OpenMaya.MColor()
+                vert1Color = OpenMaya.MColor()
+                vert2Color = OpenMaya.MColor()
+                polyIter.getColor(vert0Color, locals[0])
+                polyIter.getColor(vert1Color, locals[1])
+                polyIter.getColor(vert2Color, locals[2])
+                
+                # Make sure it has color
+                if CONVERT_BLACK_VERTS_TO_WHITE:
+                    if vert0Color == OpenMaya.MColor(0,0,0):
+                        vert0Color = OpenMaya.MColor(1,1,1)
+                    if vert1Color == OpenMaya.MColor(0,0,0):
+                        vert1Color = OpenMaya.MColor(1,1,1)
+                    if vert2Color == OpenMaya.MColor(0,0,0):
+                        vert2Color = OpenMaya.MColor(1,1,1)
+                elif vert0Color == OpenMaya.MColor(0,0,0) or vert1Color == OpenMaya.MColor(0,0,0) or vert2Color == OpenMaya.MColor(0,0,0):
+                    PrintWarning("A color on face '%s.f[%d]' is 0" % (dagPath.partialPathName(), polyIter.index()))
+                    
+                # Note: Vertices are in 0,2,1 order to make CoD happy
+                tris.append((
+                    len(meshes)-1, # Shape index
+                    materialDict[polyMaterial[0]], # Matertial index 
+                    (currentStartingVertIndex + triangleIndices[i*3], currentStartingVertIndex + triangleIndices[i*3+2], currentStartingVertIndex + triangleIndices[i*3+1]), # Vert indices
+                    ((Us[locals[0]], 1-Vs[locals[0]]),		(Us[locals[2]], 1-Vs[locals[2]]),		(Us[locals[1]], 1-Vs[locals[1]])),	  # UVs
+                    (vert0Color, 							vert2Color,								vert1Color),  		  				  # Colors
+                    (OpenMaya.MVector(normals[locals[0]]),	OpenMaya.MVector(normals[locals[2]]),	OpenMaya.MVector(normals[locals[1]])) # Normals; Must copy the normals into a new container, because the original is destructed at the end of this poltIter iteration.
+                ))
+            
+            # Next poly
+            ProgressBarStep()
+            polyIter.next()
+
+        # - Log Export - 
+        LogExport("Grabbed %i faces from %s in %s seconds.\n" % (polyIter.count(), dagPath.partialPathName(), time.time() - faceGetTime))	
+        # - Log Export - 
+        
+        # Update starting vertex index
+        currentStartingVertIndex = len(verts)
+        
+    # Error messages
+    if len(meshes) == 0:
+        print "No meshes selected to export."
+    if len(verts) == 0:
+        print "No vertices found in selected meshes."
+    if len(tris) == 0:
+        print "No faces found in selected meshes."
+    if len(materials) == 0:
+        print "No materials found on the selected meshes."
+        
+    # Done!
+    return {"meshes": meshes, "verts": verts, "faces": tris, "materials": materials}
 
 	
 	
@@ -1608,128 +1630,156 @@ def GetShapes(joints):
 # -------------------------------------------------------------------------- Export XAnim --------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 def ExportXAnim(filePath):
-	# Progress bar
-	numSelectedObjects = len(cmds.ls(selection=True))
-	if numSelectedObjects == 0:
-		return "Error: No objects selected for export"
+    # Progress bar
+    numSelectedObjects = len(cmds.ls(selection=True))
+    if numSelectedObjects == 0:
+        return "Error: No objects selected for export"
+    print("Exporting")
+    # Get data
+    joints = GetJointList()
+    if len(joints[0]) == 0:
+        return "Error: No joints selected for export"
+    #	if len(joints) > 128:
+    #		print "Warning: More than 128 joints have been selected. The animation might not work in WaW"
 
-	# Get data
-	joints = GetJointList()
-	if len(joints[0]) == 0:
-		return "Error: No joints selected for export"
-#	if len(joints) > 128:
-#		print "Warning: More than 128 joints have been selected. The animation might not work in WaW"
-	
-	# Get settings
-	frameStart = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameStartField", query=True, value=True)
-	frameEnd = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameEndField", query=True, value=True)
-	fps = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FPSField", query=True, value=True)
-	QMultiplier = math.pow(2,cmds.intField(OBJECT_NAMES['xanim'][0]+"_qualityField", query=True, value=True))
-	multiplier = 1/QMultiplier
-	fps = fps/multiplier;
-	if frameStart < 0 or frameStart > frameEnd:
-		return "Error: Invalid frame range (start < 0 or start > end)"
-	if fps <= 0:
-		return "Error: Invalid FPS (fps < 0)"
-	if multiplier <= 0 or multiplier > 1:
-		return "Error: Invalid multiplier (multiplier < 0 && multiplier >= 1)"
-	# Open file
-	f = None
-	try:
-		# Create export directory if it doesn't exist
-		directory = os.path.dirname(filePath)
-		if not os.path.exists(directory):
-			os.makedirs(directory)
-		
-		# Create files
-		f = open(filePath, 'w')
-	except (IOError, OSError) as e:
-		typex, value, traceback = sys.exc_info()
-		return "Unable to create files:\n\n%s" % value.strerror
+    # Get settings
+    frameStart = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameStartField", query=True, value=True)
+    frameEnd = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FrameEndField", query=True, value=True)
+    fps = cmds.intField(OBJECT_NAMES['xanim'][0]+"_FPSField", query=True, value=True)
+    QMultiplier = math.pow(2,cmds.intField(OBJECT_NAMES['xanim'][0]+"_qualityField", query=True, value=True))
+    multiplier = 1/QMultiplier
+    fps = fps/multiplier;
+    if frameStart < 0 or frameStart > frameEnd:
+        return "Error: Invalid frame range (start < 0 or start > end)"
+    if fps <= 0:
+        return "Error: Invalid FPS (fps < 0)"
+    if multiplier <= 0 or multiplier > 1:
+        return "Error: Invalid multiplier (multiplier < 0 && multiplier >= 1)"
+    # Open file
+    f = None
+    try:
+        # Create export directory if it doesn't exist
+        directory = os.path.dirname(filePath)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        
+        # Create files
+        f = open(filePath, 'w')
+    except (IOError, OSError) as e:
+        typex, value, traceback = sys.exc_info()
+        return "Unable to create files:\n\n%s" % value.strerror
 
-	cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue=frameEnd + 1)
-	
-	# Write header
-	f.write("// Export filename: '%s'\n" % os.path.normpath(filePath))
-	if cmds.file(query=True, exists=True):
-		f.write("// Source filename: '%s'\n" % os.path.normpath(os.path.abspath(cmds.file(query=True, sceneName=True))).encode('ascii', 'ignore'))
-	else:
-		f.write("// Source filename: Unsaved\n")
-	f.write("// Export time: %s\n\n" % datetime.datetime.now().strftime("%a %b %d %Y, %H:%M:%S"))
-	f.write("ANIMATION\n")
-	f.write("VERSION 3\n\n")
-	
-	# Write parts
-	f.write("NUMPARTS %i\n" % len(joints[0]))
-	for i, joint in enumerate(joints[0]):
-		f.write("PART %i \"%s\"\n" % (i, joint[1]))
-	
-	fLength = ((frameEnd-frameStart+1) / multiplier)
-	# Write animation data
-	f.write("\nFRAMERATE %i\n" % fps)
-	f.write("NUMFRAMES %i\n" % fLength)
-	
-	currentFrame = cmds.currentTime(query=True)
-	for i in range(int(frameStart/multiplier), int((frameEnd+1)/multiplier)):
-		f.write("\nFRAME %i" % i)
-		if cmds.checkBox("CoDMAYA_ReverseAnim", query=True, value=True):
-			cmds.currentTime(((frameEnd+1)-i)*multiplier)
-		else:
-			cmds.currentTime(i*multiplier)
-		
-		for j, joint in enumerate(joints[0]):
-			f.write("\nPART %i\n" % j)
-			WriteJointData(f, joint[2])
+    cmds.progressBar(OBJECT_NAMES['progress'][0], edit=True, maxValue=frameEnd + 1)
 
-		ProgressBarStep()
-	
-	cmds.currentTime(currentFrame)
-	
-	# Write notetrack
-	slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
-	noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
-	notes = noteList.split(",")
-	cleanNotes = []
-	
-	for note in notes:
-		parts = note.split(":")
-		if note.strip() == "" or len(parts) < 2:
-			continue
-			
-		name = "".join([c for c in parts[0] if c.isalnum() or c=="_"])
-		if name == "":
-			continue
-			
-		frame=0
-		try: 
-			frame = int(parts[1])
-		except ValueError:
-			continue
-			
-		cleanNotes.append((name, frame))
-		
-	f.write("\nNOTETRACKS\n")
-	for i, joint in enumerate(joints[0]):
-		if i == 0 and len(cleanNotes) > 0:
-			f.write("\nPART 0\nNUMTRACKS 1\nNOTETRACK 0\n")
-			f.write("NUMKEYS %i\n" % len(cleanNotes))
-			for note in cleanNotes:
-				f.write("FRAME %i \"%s\"\n" % (note[1], note[0]))
-		else:
-			f.write("\nPART %i\nNUMTRACKS 0\n" % i)
-	
-	f.close()
+    # Write header
+    f.write("// Export filename: '%s'\n" % os.path.normpath(filePath))
+    if cmds.file(query=True, exists=True):
+        f.write("// Source filename: '%s'\n" % os.path.normpath(os.path.abspath(cmds.file(query=True, sceneName=True))).encode('ascii', 'ignore'))
+    else:
+        f.write("// Source filename: Unsaved\n")
+    f.write("// Export time: %s\n\n" % datetime.datetime.now().strftime("%a %b %d %Y, %H:%M:%S"))
+    f.write("ANIMATION\n")
+    f.write("VERSION 3\n\n")
 
-	ProgressBarStep()
+    num_parts = len(joints[0])
 
-	cmds.refresh()
+    if cmds.checkBox("CoDMAYA_TAGALIGN", query=True, value=True):
+        num_parts += 1
 
-	if QueryToggableOption('E2B'):
-		try:
-			RunExport2Bin(filePath)
-		except:
-			MessageBox("The animation exported successfully however Export2Bin/ExportX failed to run, the animation will need to be converted manually.\n\nPlease check your paths.")
-	
+
+    # Write parts
+    f.write("NUMPARTS %i\n" % num_parts)
+    for i, joint in enumerate(joints[0]):
+        f.write("PART %i \"%s\"\n" % (i, joint[1]))
+
+    if cmds.checkBox("CoDMAYA_TAGALIGN", query=True, value=True):
+        f.write("PART %i \"%s\"\n" % (i + 1, "TAG_ALIGN"))        
+
+    fLength = ((frameEnd-frameStart+1) / multiplier)
+    # Write animation data
+    f.write("\nFRAMERATE %i\n" % fps)
+    f.write("NUMFRAMES %i\n" % fLength)
+
+    print(fLength)
+
+    frame_range = range(int(frameStart/multiplier), int((frameEnd+1)/multiplier))
+
+    if cmds.checkBox("CoDMAYA_ReverseAnim", query=True, value=True):
+        frame_range = reversed(frame_range)
+        
+
+    currentFrame = cmds.currentTime(query=True)
+    for n, i in enumerate(frame_range):
+        f.write("\nFRAME %i" % n)
+
+        cmds.currentTime(i)
+        
+        for j, joint in enumerate(joints[0]):
+            f.write("\nPART %i\n" % j)
+            WriteJointData(f, joint[2])
+
+        if cmds.checkBox("CoDMAYA_TAGALIGN", query=True, value=True):
+            f.write("\nPART %i\n" % (j + 1))
+            f.write("OFFSET 0.000000, 0.000000, 0.000000\n")
+            f.write("SCALE SCALE 1.000000, 1.000000, 1.000000\n")
+            f.write("X 1.000000, 0.000000, 0.000000\n")
+            f.write("Y 0.000000, 1.000000, 0.000000\n")
+            f.write("Z 0.000000, 0.000000, 1.000000\n")
+
+        ProgressBarStep()
+
+    cmds.currentTime(currentFrame)
+
+    # Write notetrack
+    slotIndex = cmds.optionMenu(OBJECT_NAMES['xanim'][0]+"_SlotDropDown", query=True, select=True)
+    noteList = cmds.getAttr(OBJECT_NAMES['xanim'][2]+(".notetracks[%i]" % slotIndex)) or ""
+    notes = noteList.split(",")
+    cleanNotes = []
+
+    for note in notes:
+        parts = note.split(":")
+        if note.strip() == "" or len(parts) < 2:
+            continue
+            
+        name = "".join([c for c in parts[0] if c.isalnum() or c=="_"]).replace("sndnt", "sndnt#").replace("rmbnt", "rmbnt#") 
+        if name == "":
+            continue
+            
+        frame=0
+        try: 
+            frame = int(parts[1])
+        except ValueError:
+            continue
+            
+        cleanNotes.append((name, frame))
+        
+    f.write("\nNOTETRACKS\n")
+    for i, joint in enumerate(joints[0]):
+        if i == 0 and len(cleanNotes) > 0:
+            f.write("\nPART 0\nNUMTRACKS 1\nNOTETRACK 0\n")
+            f.write("NUMKEYS %i\n" % len(cleanNotes))
+            for note in cleanNotes:
+                f.write("FRAME %i \"%s\"\n" % (note[1], note[0]))
+        else:
+            f.write("\nPART %i\nNUMTRACKS 0\n" % i)
+
+    if cmds.checkBox("CoDMAYA_TAGALIGN", query=True, value=True):
+        f.write("\nPART %i\nNUMTRACKS 0\n" % (i + 1))
+
+    
+
+    f.close()
+
+    ProgressBarStep()
+
+    cmds.refresh()
+
+    if QueryToggableOption('E2B'):
+        try:
+            RunExport2Bin(filePath)
+        except:
+            MessageBox("The animation exported successfully however Export2Bin/ExportX failed to run, the animation will need to be converted manually.\n\nPlease check your paths.")
+
 def WriteDummyTargetModelBoneRoot(f, numframes):
 	f.write("""
 		"targetModelBoneRoots" : [
@@ -2266,6 +2316,7 @@ def CreateXAnimWindow():
 	exportMultipleSlotsButton = cmds.button(label="Export Multiple Slots", command="CoDMayaTools.GeneralWindow_ExportMultiple('xanim')", annotation="Automatically export multiple slots at once, using each slot's saved selection")
 	exportInMultiExportCheckbox = cmds.checkBox(OBJECT_NAMES['xanim'][0]+"_UseInMultiExportCheckBox", label="Use current slot for Export Multiple", changeCommand="CoDMayaTools.GeneralWindow_ExportInMultiExport('xanim')", annotation="Check this make the 'Export Multiple Slots' button export this slot")
 	ReverseAnimation = cmds.checkBox("CoDMAYA_ReverseAnim", label="Export Animation Reversed", annotation="Check this if you want to export the anim. backwards. Usefule for reversing to make opposite sprints, etc.", value=False)
+	TagAlignExport = cmds.checkBox("CoDMAYA_TAGALIGN", label="Export TAG_ALIGN", annotation="Check this if you want to export TAG_ALIGN with the animation, required for some animations (Not needed for Viewmodel Animations)", value=False)
 	# Setup form
 	cmds.formLayout(form, edit=True,
 		attachForm=[(slotDropDown, 'top', 6), (slotDropDown, 'left', 10), (slotDropDown, 'right', 10),
@@ -2276,6 +2327,7 @@ def CreateXAnimWindow():
 					(notetracksLabel, 'left', 10),
 					(noteList, 'left', 10),
 					(ReverseAnimation, 'left', 10),
+					(TagAlignExport, 'left', 10),
 					(addNoteButton, 'right', 10),
 					(ReadNotesButton, 'right', 10),
 					(RenameNoteTrack, 'right', 10),
@@ -2304,6 +2356,7 @@ def CreateXAnimWindow():
 						(notetracksLabel, 'top', 5, qualityLabel),
 						(noteList, 'top', 5, notetracksLabel), (noteList, 'right', 10, removeNoteButton), (noteList, 'bottom', 60, separator2),
 						(ReverseAnimation, 'top', 10, noteList), (ReverseAnimation, 'right', 10, removeNoteButton),
+						(TagAlignExport, 'top', 5, ReverseAnimation),
 						(addNoteButton, 'top', 5, notetracksLabel),
 						(ReadNotesButton, 'top', 5, addNoteButton),
 						(RenameNoteTrack, 'top', 5, ReadNotesButton),
@@ -2382,7 +2435,7 @@ def RefreshXAnimWindow():
 		if note.strip() == "" or len(parts) == 0:
 			continue
 		
-		name = "".join([c for c in parts[0] if c.isalnum() or c=="_"])
+		name = "".join([c for c in parts[0] if c.isalnum() or c=="_"]).replace("sndnt", "sndnt#").replace("rmbnt", "rmbnt#")
 		if name == "":
 			continue
 		
@@ -2630,7 +2683,7 @@ def AddNote(windowID):
 		return
 	
 	userInput = cmds.promptDialog(query=True, text=True)
-	noteName = "".join([c for c in userInput if c.isalnum() or c=="_"]) # Remove all non-alphanumeric characters
+	noteName = "".join([c for c in userInput if c.isalnum() or c=="_"]).replace("sndnt", "sndnt#").replace("rmbnt", "rmbnt#") # Remove all non-alphanumeric characters
 	if noteName == "":
 		MessageBox("Invalid note name")
 		return
@@ -2697,7 +2750,7 @@ def RenameNotes(windowID):
 			return
 	
 		userInput = cmds.promptDialog(query=True, text=True)
-		noteName = "".join([c for c in userInput if c.isalnum() or c=="_"]) # Remove all non-alphanumeric characters
+		noteName = "".join([c for c in userInput if c.isalnum() or c=="_"]).replace("sndnt", "sndnt#").replace("rmbnt", "rmbnt#") # Remove all non-alphanumeric characters
 		if noteName == "":
 			MessageBox("Invalid note name")
 			return
@@ -3182,15 +3235,19 @@ def GetRootFolder(firstTimePrompt=False, game="none"):
 	return codRootPath	
 
 def RunExport2Bin(file):	
-	p = GetExport2Bin()
+    p = GetExport2Bin()
 
-	directory = os.path.dirname(os.path.realpath(file))
-	
+    directory = os.path.dirname(os.path.realpath(file))
 
-	if os.path.splitext(os.path.basename(p))[0] == "export2bin":
-		p = subprocess.Popen([p, "*"], cwd=directory)
-	elif os.path.splitext(os.path.basename(p))[0] == "exportx":
-		p = subprocess.Popen([p, "-f %s" % file])
+
+    if os.path.splitext(os.path.basename(p))[0] == "export2bin":
+        p = subprocess.Popen([p, "*"], cwd=directory)
+    elif os.path.splitext(os.path.basename(p))[0] == "exportx":
+        p = subprocess.Popen([p, "-f %s" % file])
+
+    p.wait()
+
+    os.remove(file)
 
 def SetExport2Bin():
 	export2binpath = cmds.fileDialog2(fileMode=1, dialogStyle=2)[0]
