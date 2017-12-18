@@ -57,7 +57,7 @@ from subprocess import Popen, PIPE, STDOUT
 
 WarningsDuringExport = 0 # Number of warnings shown during current export
 CM_TO_INCH = 0.3937007874015748031496062992126 # 1cm = 50/127in
-FILE_VERSION = 2.60
+FILE_VERSION = 2.63
 VERSION_CHECK_URL = "https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/version"
 GLOBAL_STORAGE_REG_KEY = (reg.HKEY_CURRENT_USER, "Software\\CoDMayaTools") # Registry path for global data storage
 #				name	 : 		control code name,				control friendly name,	data storage node name,	refresh function,		export function
@@ -169,6 +169,8 @@ def CreateMenu():
 	cmds.menuItem("AutomaticRename", label='Automatically rename joints (J_GUN, etc.)', checkBox=QueryToggableOption('AutomaticRename'), command="CoDMayaTools.SetToggableOption('AutomaticRename')" )
 	cmds.menuItem(divider=True)
 	cmds.menuItem("CoD1Mode", label='CoD1 Mode', checkBox=QueryToggableOption('CoD1Mode'), command="CoDMayaTools.SetToggableOption('CoD1Mode')" )
+	cmds.menuItem("MeshMerge", label='Merge Meshes on export', checkBox=QueryToggableOption('MeshMerge'), command="CoDMayaTools.SetToggableOption('MeshMerge')" )
+	cmds.menuItem("DeleteExport", label='Delete xBin after conversion', checkBox=QueryToggableOption('DeleteExport'), command="CoDMayaTools.SetToggableOption('DeleteExport')" )
 	cmds.menuItem("AutoUpdate", label='Auto Updates', checkBox=QueryToggableOption('AutoUpdate'), command="CoDMayaTools.SetToggableOption('AutoUpdate')" )
 	# cmds.menuItem("PrintExport", label='Print xmodel_export information.', checkBox=QueryToggableOption('PrintExport'), command="CoDMayaTools.SetToggableOption('PrintExport')" )
 	cmds.setParent(menu, menu=True)
@@ -1252,7 +1254,8 @@ def ExportXModel(filePath, make_gdt=True):
     LogExport("Writing face data.\n")
     f.write("NUMFACES %i\n" % len(shapes["faces"]))
     for j, face in enumerate(shapes["faces"]):
-        f.write("TRI %i %i 0 0\n" % (face[0], face[1]))
+        # Check if we want to merge to Obj 0, can help with degen. tris.
+        f.write("TRI %i %i 0 0\n" % (0 if QueryToggableOption('MeshMerge') else face[0], face[1]))
         for i in range(0, 3):
             f.write("VERT %i\n" % face[2][i])
             normal = (face[5][i].x, face[5][i].y, face[5][i].z)          
@@ -1712,7 +1715,7 @@ def ExportXAnim(filePath):
     for n, i in enumerate(frame_range):
         f.write("\nFRAME %i" % n)
 
-        cmds.currentTime(i)
+        cmds.currentTime(i*multiplier)
         
         for j, joint in enumerate(joints[0]):
             f.write("\nPART %i\n" % j)
@@ -1759,7 +1762,7 @@ def ExportXAnim(filePath):
             f.write("\nPART 0\nNUMTRACKS 1\nNOTETRACK 0\n")
             f.write("NUMKEYS %i\n" % len(cleanNotes))
             for note in cleanNotes:
-                f.write("FRAME %i \"%s\"\n" % (note[1], note[0]))
+                f.write("FRAME %i \"%s\"\n" % (note[1] - frameStart, note[0]))
         else:
             f.write("\nPART %i\nNUMTRACKS 0\n" % i)
 
@@ -3247,7 +3250,8 @@ def RunExport2Bin(file):
 
     p.wait()
 
-    os.remove(file)
+    if(QueryToggableOption('DeleteExport')):
+        os.remove(file)
 
 def SetExport2Bin():
 	export2binpath = cmds.fileDialog2(fileMode=1, dialogStyle=2)[0]
@@ -3360,14 +3364,15 @@ Check for updates using a seperate EXE.
 
 """
 def CheckForUpdatesEXE():
-	if QueryToggableOption("AutoUpdate"):
-		try:
-			p = ("%s -name %s -version %f -version_info_url %s" % (os.path.join(WORKING_DIR, "autoUpdate.exe"), "CoDMayaTools.py", FILE_VERSION, VERSION_CHECK_URL))
-			subprocess.Popen(p)
-		except:
-			return
-	else:
-		return
+    if QueryToggableOption("AutoUpdate"):
+        try:
+            p = ("%s -name %s -version %f -version_info_url %s" % (os.path.join(WORKING_DIR, "autoUpdate.exe"), "CoDMayaTools.py", FILE_VERSION, VERSION_CHECK_URL))
+            subprocess.Popen("%s %f" % (os.path.join(WORKING_DIR, "Updater.exe"), FILE_VERSION))
+        except:
+            print(traceback.format_exc())
+            return
+    else:
+        return
 
 	
 #def SetGame(name):
