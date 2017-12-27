@@ -1162,7 +1162,7 @@ def ExportXModel(filePath, make_gdt=True):
 
 
     # Get data
-    joints = GetJointList()
+    joints = GetJointList("xmodel")
     #	if len(joints) > 128:
     #		return "Error: More than 128 joints"
     shapes = GetShapes(joints[0])
