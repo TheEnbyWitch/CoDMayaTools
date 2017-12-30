@@ -13,6 +13,6 @@
 * [Autodesk Maya 2012 or later](http://autodesk.com/maya)
 
 ## Links:
-* [Wiki](https://github.com/Ray1235/CoDMayaTools/wiki)
 * [Releases](https://github.com/Ray1235/CoDMayaTools/releases)
-* [Source Code](https://github.com/Ray1235/CoDMayaTools/archive/master.zip)
+* [Wiki](https://github.com/Ray1235/CoDMayaTools/wiki)
+* [Source](https://github.com/Ray1235/CoDMayaTools/archive/master.zip)
