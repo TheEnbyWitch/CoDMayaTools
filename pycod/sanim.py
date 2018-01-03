@@ -23,7 +23,7 @@ class Node(object):
 
     def __init__(self, name=None, frames=0):
         self.name = name
-        self.frames = [None] * frames
+        self.frames = [None] * int(frames)
 
 
 class Shot(object):
@@ -54,9 +54,9 @@ class SiegeAnim(object):
                  'playback_speed', 'speed', 'loop', 'info')
 
     def __init__(self, frames=0, nodes=0, shots=0):
-        self.frames = frames
-        self.nodes = [None] * nodes
-        self.shots = [None] * shots
+        self.frames = int(frames)
+        self.nodes = [None] * int(nodes)
+        self.shots = [None] * int(shots)
         self.playback_speed = 1
         self.speed = 0
         self.loop = True
@@ -65,7 +65,7 @@ class SiegeAnim(object):
     def __load_positions__(self, data):
         # Load raw positions from the data buffer (3 floats 4 bytes each)
         buffer_offset = 0
-        for frame in range(self.frames):
+        for frame in range(int(self.frames)):
             for node in self.nodes:
                 trans = struct.unpack_from("fff", data, offset=buffer_offset)
                 node.frames[frame] = Frame(frame, trans)
@@ -74,7 +74,7 @@ class SiegeAnim(object):
     def __load_rotations__(self, data):
         # Load raw rotations from the data buffer(4 floats, 4 bytes each)
         buffer_offset = 0
-        for frame in range(self.frames):
+        for frame in range(int(self.frames)):
             for node in self.nodes:
                 rot = struct.unpack_from("ffff", data, offset=buffer_offset)
                 node.frames[frame].rotation = rot
@@ -129,10 +129,10 @@ class SiegeAnim(object):
         # Serialize the positions per node, per frame
         byte_stride = 12 * len(self.nodes)
         data_length = self.frames * len(self.nodes) * 12
-        data_buffer = bytearray(data_length)
+        data_buffer = bytearray(int(data_length))
         data_offset = 0
 
-        for frame in range(self.frames):
+        for frame in range(int(self.frames)):
             for node in self.nodes:
                 struct.pack_into("fff", data_buffer, data_offset,
                                  *node.frames[frame].position)
@@ -149,10 +149,10 @@ class SiegeAnim(object):
         # Serialize the positions per node, per frame
         byte_stride = 16 * len(self.nodes)
         data_length = self.frames * len(self.nodes) * 16
-        data_buffer = bytearray(data_length)
+        data_buffer = bytearray(int(data_length))
         data_offset = 0
 
-        for frame in range(self.frames):
+        for frame in range(int(self.frames)):
             for node in self.nodes:
                 struct.pack_into("ffff", data_buffer, data_offset,
                                  *node.frames[frame].rotation)
@@ -170,7 +170,7 @@ class SiegeAnim(object):
         idx_dict = {}
 
         idx_dict["animation"] = {
-            "frames": str(self.frames),
+            "frames": str(int(self.frames)),
             "loop": str(int(self.loop)),
             "nodes": str(len(self.nodes)),
             "playbackSpeed": str(self.playback_speed),

@@ -116,10 +116,11 @@ class PartInfo(object):
 
 
 class FramePart(object):
-    __slots__ = ('offset', 'matrix')
+    __slots__ = ('offset', 'matrix', 'scale')
 
-    def __init__(self, offset=None, matrix=None):
+    def __init__(self, offset=None, matrix=None, scale=(1, 1, 1)):
         self.offset = offset
+        self.scale = scale
         if matrix is None:
             self.matrix = [(), (), ()]
         else:
@@ -167,6 +168,12 @@ class Frame(object):
                 self.parts[part_index] = FramePart(offset)
                 part = self.parts[part_index]
                 state = 2
+            elif state == 2 and line_split[0] == "SCALE":
+                # Scales are not required and not used anymore, so we share state 2
+                scale = (float(line_split[1]),
+                         float(line_split[2]),
+                         float(line_split[3]))
+                part.scale = scale
             elif state == 2 and line_split[0] == "X":
                 x = (float(line_split[1]),
                      float(line_split[2]),
@@ -401,7 +408,9 @@ class Anim(XBinIO, object):
                 file.write("PART %d\n" % part_index)
                 # Investigate precision options?
                 offset = (part.offset[0], part.offset[1], part.offset[2])
+                scale = (part.scale[0], part.scale[1], part.scale[2])
                 file.write("OFFSET %f %f %f\n" % offset)
+                file.write("SCALE %f %f %f\n" % scale)
                 file.write("X %f %f %f\n" % __clamp_multi__(part.matrix[0]))
                 file.write("Y %f %f %f\n" % __clamp_multi__(part.matrix[1]))
                 file.write("Z %f %f %f\n\n" % __clamp_multi__(part.matrix[2]))
