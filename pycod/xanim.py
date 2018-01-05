@@ -28,6 +28,7 @@ class NoteTrack(object):
     def __init__(self):
         self.notes = []
         self.frame_count = None
+        self.first_frame = None
 
     def LoadFile_Raw(self, filepath):
         self.notes = []
@@ -94,12 +95,12 @@ class NoteTrack(object):
 '''
 
 
-def __clamp_float__(value, range=(-1.0, 1.0)):
-    return max(min(value, range[1]), range[0])
+def __clamp_float__(value, clamp=(-1.0, 1.0)):
+    return max(min(value, clamp[1]), clamp[0])
 
 
-def __clamp_multi__(value, range=(-1.0, 1.0)):
-    return tuple([max(min(v, range[1]), range[0]) for v in value])
+def __clamp_multi__(value, clamp=(-1.0, 1.0)):
+    return tuple([max(min(v, clamp[1]), clamp[0]) for v in value])
 
 
 def __clean_float2str__(value):
@@ -147,7 +148,7 @@ class Frame(object):
             lines_read += 1
 
             line_split = line.split()
-            if len(line_split) == 0:
+            if not line_split:
                 continue
 
             for i, split in enumerate(line_split):
@@ -156,7 +157,7 @@ class Frame(object):
 
             if state == 0 and line_split[0] == "PART":
                 part_index = int(line_split[1])
-                if(part_index >= part_count):
+                if part_index >= part_count:
                     fmt = ("part_count does not index part_index -- "
                            "%d not in [0, %d)")
                     raise ValueError(fmt % (part_index, part_count))
@@ -209,6 +210,7 @@ class Anim(XBinIO, object):
     __slots__ = ('version', 'framerate', 'parts', 'frames', 'notes')
 
     def __init__(self):
+        super(Anim, self).__init__()
         self.version = None
         self.framerate = None
         self.parts = []
@@ -222,7 +224,7 @@ class Anim(XBinIO, object):
             lines_read += 1
 
             line_split = line.split()
-            if len(line_split) == 0:
+            if not line_split:
                 continue
 
             if line_split[0] == "ANIMATION":
@@ -241,7 +243,7 @@ class Anim(XBinIO, object):
             lines_read += 1
 
             line_split = line.split()
-            if len(line_split) == 0:
+            if not line_split:
                 continue
 
             if line_split[0] == "NUMPARTS":
@@ -265,7 +267,7 @@ class Anim(XBinIO, object):
             lines_read += 1
 
             line_split = line.split()
-            if len(line_split) == 0:
+            if not line_split:
                 continue
 
             if line_split[0] == "FRAMERATE":
@@ -275,13 +277,6 @@ class Anim(XBinIO, object):
                 self.frames = [None] * frame_count
             elif line_split[0] == "FRAME":
                 frame_number = FRAME_TYPE(line_split[1])
-
-                # Don't enable this until anims that don't start on frame 0 are
-                #  sorted out
-                # if frame_number >= frame_count:
-                #   fmt = ("frame_count does not index frame_number -- "
-                #          "%d not in [0, %d)")
-                #   raise ValueError(fmt % (frame_number, frame_count))
 
                 lines_read += self.__load_frame__(file,
                                                   frame_index, frame_number)
@@ -308,7 +303,7 @@ class Anim(XBinIO, object):
             lines_read += 1
 
             line_split = line.split()
-            if len(line_split) == 0:
+            if not line_split:
                 continue
 
             # Skipping the extra data seems to be the fastest way to load these
@@ -374,7 +369,7 @@ class Anim(XBinIO, object):
                       header_message="", embed_notes=True):
         first_frame = 0
         last_frame = 0
-        if len(self.frames) != 0:
+        if self.frames:
             first_frame = min([frame.frame for frame in self.frames])
             last_frame = max([frame.frame for frame in self.frames]) + 1
 
@@ -429,7 +424,7 @@ class Anim(XBinIO, object):
             for part_index, part in enumerate(self.parts):
                 file.write("PART %d\n" % part_index)
                 track_count = 0 if part_index != 0 else (
-                    1 if len(self.notes) != 0 else 0)
+                    1 if self.notes else 0)
                 file.write("NUMTRACKS %d\n\n" % track_count)
                 if track_count != 0:
                     file.write("NOTETRACK 0\n")

@@ -7,12 +7,12 @@ import re
 from .xbin import XBinIO
 
 
-def __clamp_float__(value, range=(-1.0, 1.0)):
-    return max(min(value, range[1]), range[0])
+def __clamp_float__(value, clamp=(-1.0, 1.0)):
+    return max(min(value, clamp[1]), clamp[0])
 
 
-def __clamp_multi__(value, range=(-1.0, 1.0)):
-    return tuple([max(min(v, range[1]), range[0]) for v in value])
+def __clamp_multi__(value, clamp=(-1.0, 1.0)):
+    return tuple([max(min(v, clamp[1]), clamp[0]) for v in value])
 
 # Black Ops Note
 #  NORMAL 0.0 0.0 0.000000000000000000001 <works fine>
@@ -28,19 +28,19 @@ def __clamp_normal__(value):
 
 
 def __normalized__(iterable):
-    d = 1.0 / sqrt(sum([v * v for v in iterable]))
-    return [v * d for v in iterable]
+    dist = 1.0 / sqrt(sum([v * v for v in iterable]))
+    return [v * dist for v in iterable]
 
 
 def deserialize_image_string(ref_string):
-    if len(ref_string) == 0:
+    if not ref_string:
         return {"color": "$none.tga"}
 
     out = {}
-    for key, value in re.findall('\s*(\S+?)\s*:\s*(\S+)\s*', ref_string):
+    for key, value in re.findall(r'\s*(\S+?)\s*:\s*(\S+)\s*', ref_string):
         out[key.lower()] = value.lstrip()
 
-    if len(out) == 0:
+    if not out:
         out = {"color": ref_string}
     return out
 
@@ -59,7 +59,7 @@ def serialize_image_string(image_dict, extended_features=True):
         # in which case - the image dict extension shouldn't be used
         if 'color' in image_dict:  # use the color map
             return image_dict['color']
-        elif len(image_dict) != 0:  # if it cant be found, grab the first image
+        elif image_dict:  # if it cant be found, grab the first image
             key, value = image_dict.items()[0]
             return value
         return ""
@@ -101,7 +101,7 @@ class Vertex(object):
             lines_read += 1
 
             line_split = line.split()
-            if len(line_split) == 0:
+            if not line_split:
                 continue
 
             for i, split in enumerate(line_split):
@@ -110,14 +110,13 @@ class Vertex(object):
 
             if state == 0 and line_split[0] == vert_tok:
                 vert_index = int(line_split[1])
-                if(vert_index >= vert_count):
+                if vert_index >= vert_count:
                     fmt = ("vert_count does not index vert_index -- "
                            "%d not in [0, %d)")
                     raise ValueError(fmt % (vert_index, vert_count))
                 state = 1
             elif state == 1 and line_split[0] == "OFFSET":
-                self.offset = tuple([float(v)
-                                     for v in line_split[1:4]])  # TODO
+                self.offset = tuple([float(v) for v in line_split[1:4]])
                 state = 2
             elif state == 2 and line_split[0] == "BONES":
                 bone_count = int(line_split[1])
@@ -184,14 +183,15 @@ class Face(object):
             lines_read += 1
 
             line_split = line.split()
-            if len(line_split) == 0:
+            if not line_split:
                 continue
 
             for i, split in enumerate(line_split):
                 if split[-1:] == ',':
                     line_split[i] = split.rstrip(",")
 
-            if state == 0 and line_split[0] == "TRI":
+            # Support blocks of byte, or ushort (TRI / TRI16)
+            if state == 0 and line_split[0].startswith("TRI"):
                 tri_number += 1
                 self.mesh_id = int(line_split[1])
                 self.material_id = int(line_split[2])
@@ -202,14 +202,11 @@ class Face(object):
                 vert_number += 1
 
                 if version == 5:
-                    vert.normal = tuple([float(v)
-                                         for v in line_split[2:5]])  # TODO
+                    vert.normal = tuple([float(v) for v in line_split[2:5]])
                     vert.uv = (float(line_split[5]), float(line_split[6]))
                     self.indices[vert_number] = vert
                     if vert_number == 2:
                         return lines_read
-                    else:
-                        state == 1
 
                 # for Version 6, continue loading the vertex properties for the
                 # last vertex
@@ -238,8 +235,11 @@ class Face(object):
         return lines_read
 
     def save(self, file, version, index_offset, vert_tok_suffix=""):
-        file.write("TRI %d %d %d %d\n" %
-                   (self.mesh_id, self.material_id, 0, 0))
+        # Check for blocks which go over the byte limit
+        if self.mesh_id > 255 or self.material_id > 255:
+            file.write("TRI16 %d %d %d %d\n" % (self.mesh_id, self.material_id, 0, 0))
+        else:
+            file.write("TRI %d %d %d %d\n" % (self.mesh_id, self.material_id, 0, 0))
         for i in range(3):
             self.indices[i].save(file, version, index_offset,
                                  vert_tok_suffix=vert_tok_suffix)
@@ -323,7 +323,7 @@ class Mesh(object):
             lines_read += 1
 
             line_split = line.split()
-            if len(line_split) == 0:
+            if not line_split:
                 continue
 
             if line_split[0] == 'NUMVERTS':
@@ -354,7 +354,7 @@ class Mesh(object):
             lines_read += 1
 
             line_split = line.split()
-            if len(line_split) == 0:
+            if not line_split:
                 continue
 
             for i, split in enumerate(line_split):
@@ -379,6 +379,7 @@ class Model(XBinIO, object):
     supported_versions = [5, 6, 7]
 
     def __init__(self, name='$model'):
+        super(Model, self).__init__()
         self.name = name
         self.version = -1
 
@@ -394,7 +395,7 @@ class Model(XBinIO, object):
             lines_read += 1
 
             line_split = line.split()
-            if len(line_split) == 0:
+            if not line_split:
                 continue
 
             if state == 0 and line_split[0] == "MODEL":
@@ -422,7 +423,7 @@ class Model(XBinIO, object):
             lines_read += 1
 
             line_split = line.split()
-            if len(line_split) == 0:
+            if not line_split:
                 continue
 
             for i, split in enumerate(line_split):
@@ -431,7 +432,7 @@ class Model(XBinIO, object):
 
             if state == 0 and line_split[0] == "BONE":
                 bone_index = int(line_split[1])
-                if(bone_index >= bone_count):
+                if bone_index >= bone_count:
                     fmt = ("bone_count does not index bone_index -- "
                            "%d not in [0, %d)")
                     raise ValueError(fmt % (bone_index, bone_count))
@@ -442,7 +443,12 @@ class Model(XBinIO, object):
                                float(line_split[2]),
                                float(line_split[3]))
                 state = 2
-            # SCALE ... is ignored as its always 1
+            elif state == 2 and line_split[0] == "SCALE":
+                # Scales are not required and not used anymore, so we share state 2
+                scale = (float(line_split[1]),
+                         float(line_split[2]),
+                         float(line_split[3]))
+                bone.scale = scale
             elif state == 2 and line_split[0] == "X":
                 x = (float(line_split[1]),
                      float(line_split[2]),
@@ -473,7 +479,7 @@ class Model(XBinIO, object):
             lines_read += 1
 
             line_split = line.split()
-            if len(line_split) == 0:
+            if not line_split:
                 continue
 
             if line_split[0] == "NUMCOSMETICS":
@@ -505,7 +511,7 @@ class Model(XBinIO, object):
             lines_read += 1
 
             line_split = line.split()
-            if len(line_split) == 0:
+            if not line_split:
                 continue
 
             if line_split[0] == "NUMOBJECTS":
@@ -568,7 +574,7 @@ class Model(XBinIO, object):
             lines_read += 1
 
             line_split = line.split()
-            if len(line_split) == 0:
+            if not line_split:
                 continue
 
             for i, split in enumerate(line_split):
@@ -691,11 +697,9 @@ class Model(XBinIO, object):
         vert_count = vert_offsets[len(vert_offsets) - 1]
 
         if strict:
-            assert(len(self.materials < 256))
-            assert(len(self.objects < 256))
-            assert(len(self.materials < 256))
+            assert self.materials >= 256
             if version < 7:
-                assert(vert_count <= 0xFFFF)
+                assert vert_count <= 0xFFFF
 
         file = open(path, "w")
         file.write("// Export time: %s\n\n" % strftime("%a %b %d %H:%M:%S %Y"))
@@ -707,10 +711,7 @@ class Model(XBinIO, object):
         file.write("VERSION %d\n\n" % version)
 
         # Bone Hierarchy
-        cosmetic_count = 0
-        for bone in self.bones:
-            if bone.cosmetic:
-                cosmetic_count = cosmetic_count + 1
+        cosmetic_count = len([bone for bone in self.bones if bone.cosmetic])
         
         file.write("NUMBONES %d\n" % len(self.bones))
         if cosmetic_count > 0:

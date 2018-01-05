@@ -63,7 +63,7 @@ except:
         while True:
             # decode a block
             read_buf = src.read(1)
-            if len(read_buf) == 0:
+            if not read_buf:
                 raise CorruptError("EOF at reading literal-len")
             token = byte2int(read_buf)
 
@@ -77,7 +77,7 @@ except:
             dst.extend(read_buf)
 
             read_buf = src.read(2)
-            if len(read_buf) == 0:
+            if not read_buf:
                 if token & 0x0f != 0:
                     raise CorruptError(
                         "EOF, but match-len > 0: %u" % (token % 0x0f, ))
