@@ -60,9 +60,10 @@ from subprocess import Popen, PIPE, STDOUT
 
 WarningsDuringExport = 0 # Number of warnings shown during current export
 CM_TO_INCH = 0.3937007874015748031496062992126 # 1cm = 50/127in
-FILE_VERSION = 2.72
+FILE_VERSION = 2.73
 VERSION_CHECK_URL = "https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/version"
-GLOBAL_STORAGE_REG_KEY = (reg.HKEY_CURRENT_USER, "Software\\CoDMayaTools") # Registry path for global data storage
+ # Registry path for global data storage
+GLOBAL_STORAGE_REG_KEY = (reg.HKEY_CURRENT_USER, "Software\\CoDMayaTools")
 #				name	 : 		control code name,				control friendly name,	data storage node name,	refresh function,		export function
 OBJECT_NAMES = 	{'menu'  : 		["CoDMayaToolsMenu",    		"Call of Duty Tools", 	None,					None,					None],
 				 'progress' :	["CoDMayaToolsProgressbar",	 	"Progress", 			None,					None,					None],
@@ -82,9 +83,12 @@ RENAME_DICTONARY = {("tag_weapon", "tag_torso") : "tag_weapon_right",
 					("tag_flash1", "j_gun1") : "tag_flash_le",
 					("tag_brass1", None) : "tag_brass_le",
 }
+# Tags to attach
+GUN_BASE_TAGS = ["j_gun", "j_gun1",  "j_gun", "j_gun1", "tag_weapon", "tag_weapon1"]
+VIEW_HAND_TAGS = ["t7:tag_weapon_right", "t7:tag_weapon_left", "tag_weapon", "tag_weapon1", "tag_weapon_right", "tag_weapon_left"]
 # Supported xModel Versions for importing.
 SUPPORTED_XMODELS = [25, 62]
-# xModel Versions
+# xModel Versions based off games
 XMODEL_VERSION = {
     "CoD1" : 5,
     "CoD2" : 6,
@@ -146,6 +150,9 @@ def CreateMenu():
                     command=RemoveCameraAnimData)
     cmds.setParent(util_menu,
                     menu=True)
+    # Attach Weapon To Rig
+    cmds.menuItem(divider=True)
+    cmds.menuItem(label="Attach Weapon to Rig",  command=lambda x:WeaponBinder())
     # IWIxDDS
     cmds.menuItem(divider=True)
     cmds.menuItem(label="Convert IWI to DDS",
@@ -188,6 +195,7 @@ def CreateMenu():
     # Misc. Options.
     cmds.menuItem(divider=True)
     cmds.menuItem("AutomaticRename", label='Automatically rename joints (J_GUN, etc.)', checkBox=QueryToggableOption('AutomaticRename'), command=lambda x:SetToggableOption('AutomaticRename') )
+    cmds.menuItem("PrefixNoteType", label='Automatically prefix notetracks with type (sndnt# or rmbnt#)', checkBox=QueryToggableOption('PrefixNoteType'), command=lambda x:SetToggableOption('PrefixNoteType') )
     cmds.menuItem("MeshMerge", label='Merge Meshes on export', checkBox=QueryToggableOption('MeshMerge'), command=lambda x:SetToggableOption('MeshMerge') )
     cmds.menuItem("AutoUpdate", label='Auto Updates', checkBox=QueryToggableOption('AutoUpdate'), command=lambda x:SetToggableOption('AutoUpdate') )
     # cmds.menuItem("PrintExport", label='Print xmodel_export information.', checkBox=QueryToggableOption('PrintExport'), command=lambda x:SetToggableOption('PrintExport')" )
@@ -220,20 +228,26 @@ def GetCurrentGame(return_dict=False):
 		"CoD7" : False,
 		"CoD12" : False
 		}
+
+    # Try get the current game set.
 	try:
 		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
 		game = reg.QueryValueEx(storageKey, "CurrentGame")[0]
 	except WindowsError:
+        # Failed, create it and fall back to Bo3
 		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_ALL_ACCESS)
 		try:
 			reg.SetValueEx(storageKey, "CurrentGame", 0, reg.REG_SZ , 0 ,"CoD12")
 			game = reg.QueryValueEx(storageKey, "CurrentGame")[0]
 		except:
-			return games
+            # Fall back to Black Ops III if a game isn't set, and we can't create one.
+			game = "CoD12"
 
 	games[game] = True
+    # Return dictonary for radio buttons
 	if return_dict:
 		return games
+    # Return current game for everything else
 	else:
 		return game
 
@@ -1558,6 +1572,8 @@ def ExportXAnim(filePath):
     fps = fps/multiplier
     # Reverse Bool
     reverse = cmds.checkBox("CoDMAYA_ReverseAnim", query=True, value=True)
+    # Export Tag Align
+    write_tag_align = cmds.checkBox("CoDMAYA_TAGALIGN", query=True, value=True)
     # Frame Range
     frame_range = range(int(frameStart/multiplier), int((frameEnd+1)/multiplier))  
     # Check if we want to reverse this anim.
@@ -1586,6 +1602,9 @@ def ExportXAnim(filePath):
     # Add Joints
     for i, joint in enumerate(joints[0]):
         xanim.parts.append(xAnim.PartInfo(joint[1]))
+    # Export Tag Align (required for some anims)
+    if write_tag_align:
+        xanim.parts.append(xAnim.PartInfo("TAG_ALIGN"))
     # Loop through frames
     for n, i in enumerate(frame_range):
         # Jump to frame
@@ -1605,7 +1624,7 @@ def ExportXAnim(filePath):
             # Append it.
             frame.parts.append(frame_bone)
         # Export Tag Align (required for some anims)
-        if cmds.checkBox("CoDMAYA_TAGALIGN", query=True, value=True):
+        if write_tag_align:
             frame_bone = xAnim.FramePart()
             frame_bone.offset = (0, 0, 0)
             frame_bone.matrix = [(1, 0, 0), (0, 1, 0), (0, 0, 1)]
@@ -2580,6 +2599,8 @@ def ReadNotetracks(windowID):
     notetracks = {"WraithNotes" : "translateX",
                     "SENotes": "translateX", 
                     "NoteTrack" : "MainNote"}
+    # Add notetrack type prefix automatically
+    write_note_type = QueryToggableOption('PrefixNoteType')
     # Loop through known notes
     for notetrack, attribute in notetracks.iteritems():
         # Check if it exists
@@ -2598,6 +2619,18 @@ def ReadNotetracks(windowID):
                             # Skip end notes
                             if notetrack == "end" or notetrack == "loop_end":
                                 continue
+                            # Check if we want to write notetype prefix 
+                            if(write_note_type):
+                                # Set Sound Note as Standard
+                                note_type = "sndnt"
+                                # Split notetrack's name
+                                notesplit = notetrack.split("_")
+                                # Check is this a rumble (first word will be viewmodel/reload)
+                                if(notesplit[0] == "viewmodel" or notesplit[0] == "reload"):
+                                    note_type = "rmbnt"
+                                    notetrack = notetrack.replace("viewmodel", "reload")
+                                # Append
+                                notetrack = "#".join((note_type, notetrack))
                             # Add to global note string
                             noteList += "%s:%i," % (notetrack, note)
                             # Add to node
@@ -2947,9 +2980,9 @@ def LogExport(text, isWarning = False):
 			cmds.scrollField("ExportLog", edit = True, insertText = text)
 	
 def AboutWindow():
-	result = cmds.confirmDialog(message="Call of Duty Tools for Maya, created by Aidan Shafran (with assistance from The Internet).\nMaintained by Ray1235 (Maciej Zaremba) & Scobalula\n\nThis script is under the GNU General Public License. You may modify or redistribute this script, however it comes with no warranty. Go to http://www.gnu.org/licenses/ for more details.\n\nVersion: %.2f" % FILE_VERSION, button=['OK', 'Visit Forum Topic', 'CoD File Formats'], defaultButton='OK', title="About " + OBJECT_NAMES['menu'][1])
-	if result == "Visit Forum Topic":
-		GoToForumTopic()
+	result = cmds.confirmDialog(message="Call of Duty Tools for Maya, created by Aidan Shafran (with assistance from The Internet).\nMaintained by Ray1235 (Maciej Zaremba) & Scobalula\n\nThis script is under the GNU General Public License. You may modify or redistribute this script, however it comes with no warranty. Go to http://www.gnu.org/licenses/ for more details.\n\nVersion: %.2f" % FILE_VERSION, button=['OK', 'Visit Github Repo', 'CoD File Formats'], defaultButton='OK', title="About " + OBJECT_NAMES['menu'][1])
+	if result == "Visit Github Repo":
+		webbrowser.open("https://github.com/Ray1235/CoDMayaTools")
 	elif result == "CoD File Formats":
 		webbrowser.open("http://aidanshafran.com/codmayatools/codformats.html")
 
@@ -2957,73 +2990,7 @@ def LegacyWindow():
 	result = cmds.confirmDialog(message="""CoD1 mode exports models that are compatible with CoD1.
 When this mode is disabled, the plugin will export models that are compatible with CoD2 and newer.
 """, button=['OK'], defaultButton='OK', title="Legacy options")
-		
-# ------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# --------------------------------------------------------------------------- Versioning (Deprecated) --------------------------------------------------------------
-# ------------------------------------------------------------------------------------------------------------------------------------------------------------------
-def HasInternetAccess():
-	# http://stackoverflow.com/questions/3764291/checking-network-connection
-	'''
-	try:
-		urllib2.urlopen('http://8.8.8.8', timeout=1) # Use IP address (google.com) instead of domain name, to avoid DNS lookup time
-		return True
-	except urllib2.URLError as err:
-		return False
-	'''
-	response = os.system("ping -c 1 8.8.8.8")
-	if response == 0:
-		return True
-	else:
-		return False
-def CheckForUpdates():
-	try:
-		if not HasInternetAccess(): # Apparently, the timeout does not affect DNS lookup time, so internet connectivity needs to be checked before getting update info to avoid long script load times if there is no internet
-			return None
-			
-		response = urllib2.urlopen(VERSION_CHECK_URL, timeout=2)
-		info = response.readlines()
-		response.close()
-		
-		if not info or len(info) == 0:
-			return None
 
-		mostRecentVersion = float(info[0])
-		downloadUpdateURL = info[1] # Location of the most recent file
-		
-		if mostRecentVersion > FILE_VERSION:
-			return (mostRecentVersion, downloadUpdateURL)
-	except Exception:
-		pass
-	
-	return None
-    
-def DownloadUpdate(downloadUpdateURL):
-	try:
-		if not HasInternetAccess():
-			return None
-			
-		response = urllib2.urlopen(downloadUpdateURL, timeout=5)
-		newCode = response.read()
-		response.close()
-
-		root, ext = os.path.splitext(__file__)
-		updateFile = root + ".py"
-		
-		file = open(updateFile, 'w')
-		file.write(newCode)
-		file.close()
-		
-		MessageBox("The script has been updated. Click 'Reload Script' or restart Maya to apply the changes.")
-	except Exception:
-		result = cmds.confirmDialog(message="Something went wrong while updating. You can download the update manually from the forum topic.", button=['OK', 'Visit Forum Topic'], defaultButton='OK', title=OBJECT_NAMES['menu'][1])
-		if result == "Visit Forum Topic":
-			GoToForumTopic()
-
-def GoToForumTopic():
-	webbrowser.open("http://ugx-mods.com/forum/index.php?topic=12224.0")	
-	
-	
-	
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ----------------------------------------------------------------------- Get/Set Root Folder ----------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -3054,11 +3021,6 @@ def SetRootFolder(msg=None, game="none"):
 	return codRootPath
 	
 def GetRootFolder(firstTimePrompt=False, game="none"):
-#	if game == "none":
-#		game = currentGame
-#	if game == "none":
-#		res = cmds.confirmDialog(message="Please select the game you're working with", button=['OK'], defaultButton='OK', title="WARNING")
-#		return None
 	codRootPath = ""
 	
 	try:
@@ -3071,26 +3033,9 @@ def GetRootFolder(firstTimePrompt=False, game="none"):
 		storageKey = reg.CreateKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
 		reg.SetValueEx(storageKey, "RootPath", 0, reg.REG_SZ, "")
 		reg.CloseKey(storageKey)
-		# http://store.steampowered.com/agecheck/app/311210/
-		# Try to get root path from cod registry value
-#		try:
-#			if game == "CoD5":
-#				codKey = reg.OpenKey(reg.HKEY_LOCAL_MACHINE, "SOFTWARE\\Wow6432Node\\Activision\\Call of Duty WAW")
-#				codRootPath = reg.QueryValueEx(codKey, "InstallPath")[0]
-#				reg.CloseKey(codKey)
-#			elif game == "CoD4":
-#				codKey = reg.OpenKey(reg.HKEY_LOCAL_MACHINE, "SOFTWARE\\Wow6432Node\\Activision\\Call of Duty 4")
-#				codRootPath = reg.QueryValueEx(codKey, "InstallPath")[0]
-#				reg.CloseKey(codKey)
-#			elif game == "BO3":
-#				codRootPath = ""
-#		except WindowsError:
-#			pass
 		
 	if not os.path.isdir(codRootPath):
 		codRootPath = ""
-	# Set root path value
-	#reg.SetValueEx(storageKey, "RootPath", 0, reg.REG_SZ, codRootPath)
 
 	# First-time prompt
 	if firstTimePrompt:
@@ -3151,88 +3096,19 @@ def GetExport2Bin(skipSet=True):
 
 	return export2binpath
 
- 	
-def ForceExport2Bin(yesno):
-	try:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
-		bE2B = reg.QueryValueEx(storageKey, "UseExport2Bin")[0]
-		reg.CloseKey(storageKey)
-	except WindowsError:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-		reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, "off")
-		reg.CloseKey(storageKey)
-
-	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-	reg.SetValueEx(storageKey, "UseExport2Bin", 0, reg.REG_SZ, yesno)
-	reg.CloseKey(storageKey)
-	CreateMenu()
-
-# Support for custom options, so I don't have to make new funca
-def UseOption(name, default="off"):
-	bE2B = default
-	try:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
-		bE2B = reg.QueryValueEx(storageKey, "Use%s" % name)[0]
-		reg.CloseKey(storageKey)
-	except WindowsError:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-		reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, "off")
-		reg.CloseKey(storageKey)
-
-	if bE2B == "on":
-		res = True
-	else:
-		res = False
-
-	return res
-
-def ToggleOption(name, default="off"):
-	bE2B = default
-	try:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
-		bE2B = reg.QueryValueEx(storageKey, "Use%s" % name)[0]
-		reg.CloseKey(storageKey)
-	except WindowsError:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-		reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, "off")
-		reg.CloseKey(storageKey)
-
-	if bE2B == "off":
-		bE2B = "on"
-	else:
-		bE2B = "off"
-
-	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-	reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, bE2B)
-	reg.CloseKey(storageKey)
-	CreateMenu()
-    
-def ForceOption(name, yesno):
-	try:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1])
-		bE2B = reg.QueryValueEx(storageKey, "Use%s" % name)[0]
-		reg.CloseKey(storageKey)
-	except WindowsError:
-		storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-		reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, "off")
-		reg.CloseKey(storageKey)
-
-	storageKey = reg.OpenKey(GLOBAL_STORAGE_REG_KEY[0], GLOBAL_STORAGE_REG_KEY[1], 0, reg.KEY_SET_VALUE)
-	reg.SetValueEx(storageKey, "Use%s" % name, 0, reg.REG_SZ, yesno)
-	reg.CloseKey(storageKey)
-	CreateMenu()
-
-"""
-Check for updates using a seperate EXE.
-
-"""
 def CheckForUpdatesEXE():
+    # Check if we want updates
     if QueryToggableOption("AutoUpdate"):
+        # Try run application
         try:
-            p = ("%s -name %s -version %f -version_info_url %s" % (os.path.join(WORKING_DIR, "autoUpdate.exe"), "CoDMayaTools.py", FILE_VERSION, VERSION_CHECK_URL))
+            p = ("%s -name %s -version %f -version_info_url %s"
+            % (os.path.join(WORKING_DIR, "autoUpdate.exe"),
+            "CoDMayaTools.py",
+            FILE_VERSION,
+            VERSION_CHECK_URL))
             subprocess.Popen("%s %f" % (os.path.join(WORKING_DIR, "Updater.exe"), FILE_VERSION))
         except:
-            print(traceback.format_exc())
+            # Failed, exit.
             return
     else:
         return
@@ -3346,6 +3222,30 @@ def getObjectByAlias(aname):
 	if not cmds.attributeQuery("objAlias%s" % aname, node="CoDMayaTools", exists=True):
 		return ""
 	return cmds.getAttr("CoDMayaTools.objAlias%s" % aname) or ""
+
+# Bind the weapon to hands
+def WeaponBinder():
+    # Call of Duty specific
+    for x in xrange(0, len(GUN_BASE_TAGS)):
+        try:
+            # Select both tags and parent them
+            cmds.select(GUN_BASE_TAGS[x], replace = True)
+            cmds.select(VIEW_HAND_TAGS[x], toggle = True)
+            # Connect
+            cmds.connectJoint(connectMode = True)
+            # Parent
+            mel.eval("parent " + GUN_BASE_TAGS[x] + " " + VIEW_HAND_TAGS[x])
+            # Reset the positions of both bones
+            cmds.setAttr(GUN_BASE_TAGS[x] + ".t", 0, 0, 0)
+            cmds.setAttr(GUN_BASE_TAGS[x] + ".jo", 0, 0, 0)
+            cmds.setAttr(GUN_BASE_TAGS[x] + ".rotate", 0, 0, 0)
+            # Reset the rotation of the parent tag
+            cmds.setAttr(VIEW_HAND_TAGS[x] + ".jo", 0, 0, 0)
+            cmds.setAttr(VIEW_HAND_TAGS[x] + ".rotate", 0, 0, 0)
+            # Remove
+            cmds.select(clear = True)
+        except:
+            pass
 
 def SetToggableOption(name="", val=0):
 	if not val:
