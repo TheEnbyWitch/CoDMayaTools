@@ -1,18 +1,20 @@
+# <pep8 compliant>
+
 from itertools import repeat
 from time import strftime
 from math import sqrt
 
 import re
 
-from .xbin import XBinIO
+from .xbin import XBinIO, validate_version
 
 
-def __clamp_float__(value, clamp=(-1.0, 1.0)):
-    return max(min(value, clamp[1]), clamp[0])
+def __clamp_float__(value, clamp_range=(-1.0, 1.0)):
+    return max(min(value, clamp_range[1]), clamp_range[0])
 
 
-def __clamp_multi__(value, clamp=(-1.0, 1.0)):
-    return tuple([max(min(v, clamp[1]), clamp[0]) for v in value])
+def __clamp_multi__(value, clamp_range=(-1.0, 1.0)):
+    return tuple([max(min(v, clamp_range[1]), clamp_range[0]) for v in value])
 
 # Black Ops Note
 #  NORMAL 0.0 0.0 0.000000000000000000001 <works fine>
@@ -28,8 +30,8 @@ def __clamp_normal__(value):
 
 
 def __normalized__(iterable):
-    dist = 1.0 / sqrt(sum([v * v for v in iterable]))
-    return [v * dist for v in iterable]
+    d = 1.0 / sqrt(sum([v * v for v in iterable]))
+    return [v * d for v in iterable]
 
 
 def deserialize_image_string(ref_string):
@@ -59,7 +61,7 @@ def serialize_image_string(image_dict, extended_features=True):
         # in which case - the image dict extension shouldn't be used
         if 'color' in image_dict:  # use the color map
             return image_dict['color']
-        elif image_dict:  # if it cant be found, grab the first image
+        elif image_dict != 0:  # if it cant be found, grab the first image
             key, value = image_dict.items()[0]
             return value
         return ""
@@ -68,13 +70,13 @@ def serialize_image_string(image_dict, extended_features=True):
 class Bone(object):
     __slots__ = ('name', 'parent', 'offset', 'matrix', 'scale', 'cosmetic')
 
-    def __init__(self, name, parent=-1):
+    def __init__(self, name, parent=-1, cosmetic=False):
         self.name = name
         self.parent = parent
         self.offset = None
         self.matrix = [None] * 3
         self.scale = (1.0, 1.0, 1.0)
-        self.cosmetic = False
+        self.cosmetic = cosmetic
 
 
 class Vertex(object):
@@ -116,7 +118,8 @@ class Vertex(object):
                     raise ValueError(fmt % (vert_index, vert_count))
                 state = 1
             elif state == 1 and line_split[0] == "OFFSET":
-                self.offset = tuple([float(v) for v in line_split[1:4]])
+                self.offset = tuple([float(v)
+                                     for v in line_split[1:4]])  # TODO
                 state = 2
             elif state == 2 and line_split[0] == "BONES":
                 bone_count = int(line_split[1])
@@ -190,7 +193,7 @@ class Face(object):
                 if split[-1:] == ',':
                     line_split[i] = split.rstrip(",")
 
-            # Support blocks of byte, or ushort (TRI / TRI16)
+            # Support both TRI & TRI16
             if state == 0 and line_split[0].startswith("TRI"):
                 tri_number += 1
                 self.mesh_id = int(line_split[1])
@@ -202,11 +205,14 @@ class Face(object):
                 vert_number += 1
 
                 if version == 5:
-                    vert.normal = tuple([float(v) for v in line_split[2:5]])
+                    vert.normal = tuple([float(v)
+                                         for v in line_split[2:5]])  # TODO
                     vert.uv = (float(line_split[5]), float(line_split[6]))
                     self.indices[vert_number] = vert
                     if vert_number == 2:
                         return lines_read
+                    else:
+                        continue
 
                 # for Version 6, continue loading the vertex properties for the
                 # last vertex
@@ -235,11 +241,13 @@ class Face(object):
         return lines_read
 
     def save(self, file, version, index_offset, vert_tok_suffix=""):
-        # Check for blocks which go over the byte limit
-        if self.mesh_id > 255 or self.material_id > 255:
-            file.write("TRI16 %d %d %d %d\n" % (self.mesh_id, self.material_id, 0, 0))
+        # Only use TRI16 if we're using version 7 or newer, etc.
+        if version >= 7 and (self.mesh_id > 255 or self.material_id > 255):
+            token = "TRI16"
         else:
-            file.write("TRI %d %d %d %d\n" % (self.mesh_id, self.material_id, 0, 0))
+            token = "TRI"
+        file.write("%s %d %d %d %d\n" %
+                   (token, self.mesh_id, self.material_id, 0, 0))
         for i in range(3):
             self.indices[i].save(file, version, index_offset,
                                  vert_tok_suffix=vert_tok_suffix)
@@ -375,18 +383,16 @@ class Mesh(object):
 
 
 class Model(XBinIO, object):
-    __slots__ = ('version', 'name', 'bones', 'cosmetics', 'meshes', 'materials')
+    __slots__ = ('name', 'bones', 'meshes', 'materials')
     supported_versions = [5, 6, 7]
 
     def __init__(self, name='$model'):
-        super(Model, self).__init__()
+        super(XBinIO, self).__init__()
         self.name = name
-        self.version = -1
 
         self.bones = []
         self.meshes = []
         self.materials = []
-        self.cosmetics = 0
 
     def __load_header__(self, file):
         lines_read = 0
@@ -443,12 +449,7 @@ class Model(XBinIO, object):
                                float(line_split[2]),
                                float(line_split[3]))
                 state = 2
-            elif state == 2 and line_split[0] == "SCALE":
-                # Scales are not required and not used anymore, so we share state 2
-                scale = (float(line_split[1]),
-                         float(line_split[2]),
-                         float(line_split[3]))
-                bone.scale = scale
+            # SCALE ... is ignored as its always 1
             elif state == 2 and line_split[0] == "X":
                 x = (float(line_split[1]),
                      float(line_split[2]),
@@ -475,6 +476,7 @@ class Model(XBinIO, object):
         lines_read = 0
         bone_count = 0
         bones_read = 0
+        cosmetic_count = 0
         for line in file:
             lines_read += 1
 
@@ -482,23 +484,23 @@ class Model(XBinIO, object):
             if not line_split:
                 continue
 
+            # TODO: Reordering these token checks may improve performance
             if line_split[0] == "NUMCOSMETICS":
-                self.cosmetics = int(line_split[1])
+                cosmetic_count = int(line_split[1])
             elif line_split[0] == "NUMBONES":
                 bone_count = int(line_split[1])
                 self.bones = [Bone(None)] * bone_count
             elif line_split[0] == "BONE":
                 index = int(line_split[1])
                 parent = int(line_split[2])
-                bone = Bone(line_split[3].strip('"'), parent)
-                if index >= (len(self.bones) - self.cosmetics):
-                    bone.cosmetic = True
-                self.bones[index] = bone
+                cosmetic = (index >= (bone_count - cosmetic_count))
+                self.bones[index] = Bone(line_split[3].strip('"'),
+                                         parent, cosmetic)
                 bones_read += 1
                 if bones_read == bone_count:
                     break
 
-        for bone in range(bone_count):
+        for _ in range(bone_count):
             lines_read += self.__load_bone__(file, bone_count)
 
         return lines_read
@@ -586,9 +588,16 @@ class Model(XBinIO, object):
                 self.materials = [None] * material_count
             elif line_split[0] == "MATERIAL":
                 index = int(line_split[1])
-                name = line_split[2].strip('"')
-                material_type = line_split[3].strip('"')
-                images = deserialize_image_string(line_split[4].strip('"'))
+                if version == 5:
+                    # Legacy XModel materials don't explicitly have a name
+                    #  field, so we simply auto-generate a name
+                    name = "Material_%d" % index
+                    material_type = "Lambert"
+                    images = deserialize_image_string(line_split[2].strip('"'))
+                else:
+                    name = line_split[2].strip('"')
+                    material_type = line_split[3].strip('"')
+                    images = deserialize_image_string(line_split[4].strip('"'))
                 material = Material(name, material_type, images)
                 self.materials[index] = Material(name, material_type, images)
                 material = self.materials[index]
@@ -680,10 +689,11 @@ class Model(XBinIO, object):
                       header_message="",
                       extended_features=True,
                       strict=False):
-        if version is None:
-            version = self.version
+        # If there is no current version, fallback to the argument
+        version = validate_version(self, version)
 
         if version not in Model.supported_versions:
+            self.version = None
             vargs = (version, repr(Model.supported_versions))
             raise ValueError(
                 "Invalid model version: %d - must be one of %s" % vargs)
@@ -697,7 +707,9 @@ class Model(XBinIO, object):
         vert_count = vert_offsets[len(vert_offsets) - 1]
 
         if strict:
-            assert self.materials >= 256
+            # TODO: Add cosmetic hierarchy validation
+            assert len(self.materials) < 256
+            assert len(self.meshes) < 256
             if version < 7:
                 assert vert_count <= 0xFFFF
 
@@ -711,15 +723,45 @@ class Model(XBinIO, object):
         file.write("VERSION %d\n\n" % version)
 
         # Bone Hierarchy
-        cosmetic_count = len([bone for bone in self.bones if bone.cosmetic])
-        
         file.write("NUMBONES %d\n" % len(self.bones))
-        if cosmetic_count > 0:
-            file.write("NUMCOSMETICS %d\n" % cosmetic_count)
 
+        # NOTE: Cosmetic bones are only used by version 7 and later
+        if version == 7:
+            cosmetics = len([bone for bone in self.bones if bone.cosmetic])
+            if cosmetics > 0:
+                file.write("NUMCOSMETICS %d\n" % cosmetics)
+
+                # Cosmetic bones MUST be written AFTER the standard bones in
+                #  the bone info list, so we need to generate a sorted list
+                #  of index/bone pairs
+                bone_enum = sorted(enumerate(self.bones),
+                                   key=lambda kvp: kvp[1].cosmetic)
+
+                # Allocate space for the bone map before any
+                #  modifications to self.bones
+                bone_map = [None] * len(self.bones)
+
+                # Update the bone list & build old->new index map
+                index_map, self.bones = zip(*bone_enum)
+                for new, old in enumerate(index_map):
+                    bone_map[old] = new
+
+                # Rebuild the parent indices for all non-root bones
+                for bone in self.bones:
+                    if bone.parent != -1:
+                        bone.parent = bone_map[bone.parent]
+
+                # Rebuild the weight tables for all vertices
+                for mesh in self.meshes:
+                    for vert in mesh.verts:
+                        vert.weights = [(bone_map[old_index], weight)
+                                        for old_index, weight in vert.weights]
+
+        # Write the actual bone info
         for bone_index, bone in enumerate(self.bones):
             file.write("BONE %d %d \"%s\"\n" %
                        (bone_index, bone.parent, bone.name))
+
         file.write("\n")
 
         # Bone Transform Data
@@ -789,8 +831,8 @@ class Model(XBinIO, object):
 
     def WriteFile_Bin(self, path, version=None,
                       extended_features=True, header_message=""):
-        if version is None:
-            version = self.version
+        # If there is no current version, fallback to the argument
+        version = validate_version(self, version)
         return self.__xbin_writefile_model_internal__(path,
                                                       version,
                                                       extended_features,

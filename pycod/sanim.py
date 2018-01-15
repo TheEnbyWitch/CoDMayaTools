@@ -1,12 +1,22 @@
+# <pep8 compliant>
+
 import json
 import zipfile
 import struct
 
 '''
-    -------------------
+    ---------------------------
     ---< SIEGE_ANIM_SOURCE >---
-    -------------------
+    ---------------------------
 '''
+
+# buffer() is required for file.writestr in Python 2.x but
+#  is no longer required (and doesn't exist) in Python 3.x
+try:
+    buffer
+except NameError:
+    def buffer(data):
+        return data
 
 
 class Frame(object):
