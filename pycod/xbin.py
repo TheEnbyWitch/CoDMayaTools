@@ -484,7 +484,7 @@ class XBlock(object):
                            0x1675, int(note.frame), string)
         end = file.tell() + len(data)
         file.write(data)
-        file.write(bytearray(0) * padding(end))
+        file.write("\0" * (padded(end) - end))
 
 
 class XBinIO(object):
