@@ -2588,6 +2588,19 @@ def AddNote(windowID):
     cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", edit=True, append=noteName, selectIndexedItem=len((existingItems or []))+1)
     SelectNote(windowID)
 
+def __get_notetracks__():
+    """Loads all the notetracks in the scene"""
+    if not cmds.objExists("SENotes"):
+        cmds.rename(cmds.spaceLocator(), "SENotes")
+
+    if not cmds.objExists("SENotes.Notetracks"):
+        cmds.addAttr("SENotes", longName="Notetracks",
+                     dataType="string", storable=True)
+        cmds.setAttr("SENotes.Notetracks", "{}", type="string")
+
+    # Load the existing notetracks buffer, then ensure we have this notetrack
+    return json.loads(cmds.getAttr("SENotes.Notetracks"))
+
 def ReadNotetracks(windowID):
     """
     Read notetracks from imported animations.
@@ -2595,51 +2608,31 @@ def ReadNotetracks(windowID):
     slotIndex = cmds.optionMenu(OBJECT_NAMES[windowID][0]+"_SlotDropDown", query=True, select=True)
     existingItems = cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", query=True, allItems=True)
     noteList = cmds.getAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex)) or ""
-    # Known Notetracks ("Name : Attribute")
-    notetracks = {"WraithNotes" : "translateX",
-                    "SENotes": "translateX", 
-                    "NoteTrack" : "MainNote"}
+    # Get Notetracks
+    notetracks = __get_notetracks__()
     # Add notetrack type prefix automatically
     write_note_type = QueryToggableOption('PrefixNoteType')
-    # Loop through known notes
-    for notetrack, attribute in notetracks.iteritems():
-        # Check if it exists
-        if cmds.objExists(notetrack):
-            # Check child nodes
-            relatives = cmds.listRelatives( notetrack, c=True )
-            # Loop through notetracks
-            for notetrack in relatives: # Go through each one.
-                try:
-                    # Get Keyframes
-                    keyframes = cmds.keyframe(notetrack, attribute="translateX", sl=False, q=True, tc=True)
-                    # Check if we have any
-                    if keyframes:
-                        # Run through them
-                        for note in keyframes:
-                            # Skip end notes
-                            if notetrack == "end" or notetrack == "loop_end":
-                                continue
-                            # Check if we want to write notetype prefix 
-                            if(write_note_type):
-                                # Set Sound Note as Standard
-                                note_type = "sndnt"
-                                # Split notetrack's name
-                                notesplit = notetrack.split("_")
-                                # Check is this a rumble (first word will be viewmodel/reload)
-                                if(notesplit[0] == "viewmodel" or notesplit[0] == "reload"):
-                                    note_type = "rmbnt"
-                                    notetrack = notetrack.replace("viewmodel", "reload")
-                                # Append
-                                notetrack = "#".join((note_type, notetrack))
-                            # Add to global note string
-                            noteList += "%s:%i," % (notetrack, note)
-                            # Add to node
-                            cmds.setAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
-                            cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", edit=True, append=notetrack, selectIndexedItem=len((existingItems or []))+1)
-                except Exception as e:
-                    print("Error has occured while reading note: %s, the error was: '%s', Skipping." % (notetrack, e))
-                    print(traceback.format_exc())
-
+    for note, frames in notetracks.iteritems():
+        # Check if we want to write notetype
+        # and if note is not already prefixed.
+        if(write_note_type and not "nt#" in note):
+            # Set Sound Note as Standard
+            note_type = "sndnt"
+            # Split notetrack's name
+            notesplit = note.split("_")
+            # Check is this a rumble (first word will be viewmodel/reload)
+            if(notesplit[0] == "viewmodel" or notesplit[0] == "reload"):
+                note_type = "rmbnt"
+                note = note.replace("viewmodel", "reload")
+            # Append
+            note = "#".join((note_type, note))
+        # Loop through note frames
+        for frame in frames:
+            # Append to list and scroll list
+            noteList += "%s:%i," % (note, frame)
+            cmds.setAttr(OBJECT_NAMES[windowID][2]+(".notetracks[%i]" % slotIndex), noteList, type='string')
+            cmds.textScrollList(OBJECT_NAMES[windowID][0]+"_NoteList", edit=True, append=note, selectIndexedItem=len((existingItems or []))+1)
+    # Set selected note
     SelectNote(windowID)
 
 def RenameNotes(windowID):
