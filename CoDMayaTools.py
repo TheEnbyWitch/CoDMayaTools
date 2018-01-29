@@ -2601,7 +2601,7 @@ def __get_notetracks__():
     # Load the existing notetracks buffer, then ensure we have this notetrack
     return json.loads(cmds.getAttr("SENotes.Notetracks"))
 
-    def ReadNotetracks(windowID):
+def ReadNotetracks(windowID):
     """
     Read notetracks from imported animations.
     """
