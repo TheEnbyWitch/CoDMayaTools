@@ -60,7 +60,7 @@ from subprocess import Popen, PIPE, STDOUT
 
 WarningsDuringExport = 0 # Number of warnings shown during current export
 CM_TO_INCH = 0.3937007874015748031496062992126 # 1cm = 50/127in
-FILE_VERSION = 2.74
+FILE_VERSION = 2.77
 VERSION_CHECK_URL = "https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/version"
  # Registry path for global data storage
 GLOBAL_STORAGE_REG_KEY = (reg.HKEY_CURRENT_USER, "Software\\CoDMayaTools")
@@ -2601,7 +2601,7 @@ def __get_notetracks__():
     # Load the existing notetracks buffer, then ensure we have this notetrack
     return json.loads(cmds.getAttr("SENotes.Notetracks"))
 
-def ReadNotetracks(windowID):
+    def ReadNotetracks(windowID):
     """
     Read notetracks from imported animations.
     """
@@ -2613,6 +2613,9 @@ def ReadNotetracks(windowID):
     # Add notetrack type prefix automatically
     write_note_type = QueryToggableOption('PrefixNoteType')
     for note, frames in notetracks.iteritems():
+        # Ignore end/loop_end
+        if note == "end" or note == "loop_end":
+            continue
         # Check if we want to write notetype
         # and if note is not already prefixed.
         if(write_note_type and not "nt#" in note):
