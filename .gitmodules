@@ -1,0 +1,3 @@
+[submodule "PyCoD"]
+	path = PyCoD
+	url = https://github.com/SE2Dev/PyCoD.git
