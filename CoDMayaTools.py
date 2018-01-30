@@ -53,6 +53,7 @@ import struct
 import shutil
 import zipfile
 import re
+import json
 import pycod.xmodel as xModel
 import pycod.xanim as xAnim
 from subprocess import Popen, PIPE, STDOUT
