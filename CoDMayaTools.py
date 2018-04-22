@@ -1,3 +1,4 @@
+# -*- coding: iso-8859-15 -*-
 # Copyright 2016, Ray1235
 
 # CoDMayaTools is free software: you can redistribute it and/or modify
@@ -54,14 +55,14 @@ import shutil
 import zipfile
 import re
 import json
-import pycod.xmodel as xModel
-import pycod.xanim as xAnim
+from PyCoD import xmodel as XModel
+from PyCoD import xanim as xAnim
 from subprocess import Popen, PIPE, STDOUT
 
 
 WarningsDuringExport = 0 # Number of warnings shown during current export
 CM_TO_INCH = 0.3937007874015748031496062992126 # 1cm = 50/127in
-FILE_VERSION = 2.77
+FILE_VERSION = 2.84
 VERSION_CHECK_URL = "https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/version"
  # Registry path for global data storage
 GLOBAL_STORAGE_REG_KEY = (reg.HKEY_CURRENT_USER, "Software\\CoDMayaTools")
