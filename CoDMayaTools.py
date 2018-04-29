@@ -63,7 +63,7 @@ from subprocess import Popen, PIPE, STDOUT
 WarningsDuringExport = 0 # Number of warnings shown during current export
 CM_TO_INCH = 0.3937007874015748031496062992126 # 1cm = 50/127in
 M_PI = 3.14159265359
-FILE_VERSION = 2.77
+FILE_VERSION = 2.9
 VERSION_CHECK_URL = "https://raw.githubusercontent.com/Ray1235/CoDMayaTools/master/version"
  # Registry path for global data storage
 GLOBAL_STORAGE_REG_KEY = (reg.HKEY_CURRENT_USER, "Software\\CoDMayaTools")
