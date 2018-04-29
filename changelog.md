@@ -1,6 +1,10 @@
 Please check back for updates regularly, if you have an issue that isn't mentioned here/fixed in a recent version please open an issue.
 
 # Changelog
+## VERSION 2.9
+* Improved XCam support
+* Minor fixes
+
 ## VERSION 2.6.0
 * Added Black Ops xModel importing
 * Added Black Ops IWI conversion
