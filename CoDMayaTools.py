@@ -54,8 +54,8 @@ import shutil
 import zipfile
 import re
 import json
-import pycod.xmodel as xModel
-import pycod.xanim as xAnim
+from PyCoD import xmodel as xModel
+from PyCoD import xanim as xAnim
 from array import array
 from subprocess import Popen, PIPE, STDOUT
 
