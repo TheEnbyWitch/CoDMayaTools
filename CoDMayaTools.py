@@ -29,6 +29,8 @@ EXPORT_WINDOW_NUMSLOTS = 100
 CONVERT_BLACK_VERTS_TO_WHITE = False
  # Enable Support for ExportX/Export2Bin
 USE_EXPORT_X = False
+# Strength Factor for camera weapon animation
+CameraAnimationStrength = 1
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # ---------------------------------------------------------------------------- Global ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -143,6 +145,9 @@ def CreateMenu():
                     command="CoDMayaTools.setObjectAlias('camera')")
     cmds.menuItem(label="Mark as weapon",
                     command="CoDMayaTools.setObjectAlias('weapon')")
+    cmds.menuItem(divider=True)
+    cmds.menuItem(label="Set Camera Animation Strength",
+                    command=lambda x:ShowSetStrengthWindow())
     cmds.menuItem(divider=True)
     cmds.menuItem(label="Generate camera animation",
                     command="CoDMayaTools.GenerateCamAnim()")
@@ -3113,6 +3118,25 @@ def CheckForUpdatesEXE():
 #   Credits:                                             #
 #   Aidan - teaching me how to make plugins like this :) #
 ##########################################################
+def ShowSetStrengthWindow():
+    try:
+        if cmds.window(ram,exists=True):
+            cmds.deleteUI(ram)
+    except:
+        pass
+    global CameraAnimationStrength
+    ram = cmds.window("SetStrength",t="SetStrength",w=300,h=150)
+    cmds.columnLayout(adj=True)
+    cmds.text("Set Camera Animation Strength:")
+    TempStrength = cmds.intSliderGrp(l="Strength",min=1,max=10,field=True,value=CameraAnimationStrength,step=1)
+    cmds.button(l="Set",c=lambda x:SetStrength(TempStrength))
+    cmds.showWindow(ram)
+
+def SetStrength(slider):
+    global CameraAnimationStrength
+    TempStrengthValue = cmds.intSliderGrp(slider,q=True,value=True)
+    CameraAnimationStrength=TempStrengthValue
+    print("Camera Animation Strength = "+str(CameraAnimationStrength))
 
 def GenerateCamAnim(reqarg=""):
     useDefMesh = False
@@ -3134,16 +3158,16 @@ def GenerateCamAnim(reqarg=""):
         cmds.currentTime(i)
         jointGun = cmds.xform(getObjectByAlias("weapon"), query=True, rotation=True)
         jointGunPos = cmds.xform(getObjectByAlias("weapon"), query=True, translation=True)
-        GunMoveX = jointGunPos[0]*-0.025
-        GunRotYAdd = jointGunPos[0]*-0.5
-        GunRotXAdd = jointGunPos[1]*-0.25
+        GunMoveX = jointGunPos[0]*-0.025*CameraAnimationStrength
+        GunRotYAdd = jointGunPos[0]*-0.5*CameraAnimationStrength
+        GunRotXAdd = jointGunPos[1]*-0.25*CameraAnimationStrength
         GunRot = jointGun
         GunRot[0] = jointGun[0]
-        GunRot[0] = GunRot[0] * 0.025
+        GunRot[0] = GunRot[0] * 0.025*CameraAnimationStrength
         GunRot[1] = jointGun[1]
-        GunRot[1] = GunRot[1] * 0.025
+        GunRot[1] = GunRot[1] * 0.025*CameraAnimationStrength
         GunRot[2] = jointGun[2]
-        GunRot[2] = GunRot[2] * 0.025
+        GunRot[2] = GunRot[2] * 0.025*CameraAnimationStrength
         print GunRot
         print jointGun
         cmds.select(getObjectByAlias("camera"), replace=True)
