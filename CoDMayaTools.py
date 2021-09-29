@@ -42,12 +42,11 @@ import os.path
 import traceback
 import maya.OpenMaya as OpenMaya
 import maya.OpenMayaAnim as OpenMayaAnim
-import urllib2
 import socket
 import subprocess
 import webbrowser
-import Queue
-import _winreg as reg
+import queue
+import winreg as reg
 import time
 import struct
 import shutil
@@ -358,7 +357,7 @@ def ImportXAnim(game):
         joints = []
         for i in range(numJoints):
             joints.append(ReadNullTerminatedString(f))
-        print joints
+        print (joints)
 
         # Read joint frame data
         for i in range(numJoints):
@@ -369,7 +368,7 @@ def ImportXAnim(game):
             numPositions = struct.unpack('<H', f.read(2))[0]
             for j in range(numPositions):
                 pos = struct.unpack('<fff', f.read(12))
-                print pos
+                print (pos)
 
 
 
@@ -952,7 +951,7 @@ def GetJointList(export_type=None):
             continue
 
         # Breadth first search of joint tree
-        searchQueue = Queue.Queue(0)
+        searchQueue = queue.Queue(0)
         searchQueue.put((-1, dagNode, True)) # (index = child node's parent index, child node)
         while not searchQueue.empty():
             node = searchQueue.get()
@@ -1024,7 +1023,7 @@ def GetCameraList():
             continue
 
         # Breadth first search of camera tree
-        searchQueue = Queue.Queue(0)
+        searchQueue = queue.Queue(0)
         searchQueue.put((-1, dagNode, True)) # (index = child node's parent index, child node)
         while not searchQueue.empty():
             node = searchQueue.get()
@@ -1516,7 +1515,7 @@ def ExportMeshData(joints, xmodel, merge_mesh = True):
                 continue
             # Loop indices
             # vertexIndices.length() has 3 values per triangle
-            for i in range(triangleIndices.length()/3):
+            for i in range(len(triangleIndices)//3):
                 # New xModel Face
                 xface = xModel.Face(0 if merge_mesh else len(meshes)-1 , materialDict[polyMaterial[0]])
                 # Put local indices into an array for easy access
@@ -1956,12 +1955,12 @@ def CreateNewGunsleeveMayaFile():
     cmds.deleteUI(progressWindow, window=True)
 
     # Handle response
-    if type(response) == str or type(response) == unicode:
+    if type(response) == str:
         MessageBox(response)
     elif WarningsDuringExport > 0:
         MessageBox("Warnings occurred during export. Check the script editor output for more details.")
 
-    if type(response) != str and type(response) != unicode:
+    if type(response) != str:
         MessageBox("Export saved to\n\n" + os.path.normpath(exportPath))
 
 def CreateNewViewmodelRigFile():
@@ -2860,7 +2859,7 @@ def GeneralWindow_ExportSelected(windowID, exportingMultiple):
 
     # Handle response
 
-    if type(response) == str or type(response) == unicode:
+    if type(response) == str:
         if exportingMultiple:
             MessageBox("Slot %i\n\n%s" % (slotIndex, response))
         else:
@@ -2890,7 +2889,7 @@ def GeneralWindow_ExportMultiple(windowID):
     for i in range(1, EXPORT_WINDOW_NUMSLOTS+1):
         useInMultiExport = cmds.getAttr(OBJECT_NAMES[windowID][2]+(".useinmultiexport[%i]" % i))
         if useInMultiExport:
-            print "Exporting slot %i in multiexport" % i
+            print ("Exporting slot %i in multiexport" % i)
             cmds.optionMenu(OBJECT_NAMES[windowID][0]+"_SlotDropDown", edit=True, select=i)
             exec(OBJECT_NAMES[windowID][3] + "()") # Refresh window
             if GeneralWindow_GetSavedSelection(windowID):
@@ -2940,10 +2939,10 @@ def SaveReminder(allowUnsaved=True):
 def PrintWarning(message):
     global WarningsDuringExport
     if WarningsDuringExport < MAX_WARNINGS_SHOWN:
-        print "WARNING: %s" % message
+        print ("WARNING: %s" % message)
         WarningsDuringExport += 1
     elif WarningsDuringExport == MAX_WARNINGS_SHOWN:
-        print "More warnings not shown because printing text is slow...\n"
+        print ("More warnings not shown because printing text is slow...\n")
         WarningsDuringExport = MAX_WARNINGS_SHOWN+1
 
 def MessageBox(message):
@@ -3117,10 +3116,10 @@ def CheckForUpdatesEXE():
 def GenerateCamAnim(reqarg=""):
     useDefMesh = False
     if (cmds.objExists(getObjectByAlias("camera")) == False):
-        print "Camera doesn't exist"
+        print ("Camera doesn't exist")
         return
     if (cmds.objExists(getObjectByAlias("weapon")) == False):
-        print "Weapon doesn't exist"
+        print ("Weapon doesn't exist")
         return
     animStart = cmds.playbackOptions(query=True, minTime=True)
     animEnd = cmds.playbackOptions(query=True, maxTime=True)
@@ -3144,8 +3143,8 @@ def GenerateCamAnim(reqarg=""):
         GunRot[1] = GunRot[1] * 0.025
         GunRot[2] = jointGun[2]
         GunRot[2] = GunRot[2] * 0.025
-        print GunRot
-        print jointGun
+        print (GunRot)
+        print (jointGun)
         cmds.select(getObjectByAlias("camera"), replace=True)
         # cmds.rotate(GunRot[0], GunRot[1], GunRot[2], rotateXYZ=True)
         cmds.setKeyframe(v=(GunMoveX-GunMoveXorig),at='translateX')
@@ -3157,10 +3156,10 @@ def GenerateCamAnim(reqarg=""):
 
 def RemoveCameraKeys(reqarg=""):
     if (cmds.objExists(getObjectByAlias("camera")) == False):
-        print "ERROR: Camera doesn't exist"
+        print ("ERROR: Camera doesn't exist")
         return
     else:
-        print "Camera exists!"
+        print ("Camera exists!")
         jointCamera = cmds.joint(getObjectByAlias("camera"), query=True)
     animStart = cmds.playbackOptions(query=True, minTime=True)
     animEnd = cmds.playbackOptions(query=True, maxTime=True)
@@ -3176,10 +3175,10 @@ def RemoveCameraKeys(reqarg=""):
 
 def RemoveCameraAnimData(reqarg=""):
     if (cmds.objExists(getObjectByAlias("camera")) == False):
-        print "ERROR: Camera doesn't exist"
+        print ("ERROR: Camera doesn't exist")
         return
     else:
-        print "Camera exists!"
+        print ("Camera exists!")
         jointCamera = cmds.joint(getObjectByAlias("camera"), query=True)
     animStart = cmds.playbackOptions(query=True, animationStartTime=True)
     animEnd = cmds.playbackOptions(query=True, animationEndTime=True)
@@ -3199,9 +3198,9 @@ def setObjectAlias(aname):
         cmds.addAttr("CoDMayaTools", longName="objAlias%s" % aname, dataType='string')
     objects = cmds.ls(selection=True);
     if len(objects) == 1:
-        print "Marking selected object as %s" % aname
+        print ("Marking selected object as %s" % aname)
     else:
-        print "Selected more than 1 object or none at all"
+        print ("Selected more than 1 object or none at all")
         return
     obj = objects[0]
     cmds.setAttr("CoDMayaTools.objAlias%s" % aname, obj, type='string')
@@ -3291,4 +3290,4 @@ CreateXAnimWindow()
 CreateXModelWindow()
 CreateXCamWindow()
 
-print "CoDMayaTools initialized."
+print ("CoDMayaTools initialized.")
