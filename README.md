@@ -31,7 +31,8 @@ To install the Call of Duty Maya Tools follow the brief [Installation Guide](htt
 * [Wiki](https://github.com/Ray1235/CoDMayaTools/wiki)
 * [Source](https://github.com/Ray1235/CoDMayaTools/archive/master.zip)
 
-## Contributors/Credits:
-* Ray1235/Scobalula: Active Developers/Maintain Project
+## Credits:
+* Luna Ryuko: Fork Maintainer
+* Scobalula: PyCoD implementation code
 * Aidian Shafran: Original Developer 
 * DTZxPorter/SE2Dev: PyCod Library
